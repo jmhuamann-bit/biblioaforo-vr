@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BiblioAforo VR</title>
+<meta name="description" content="BiblioAforo VR: encuentra un asiento libre en la biblioteca en 3D o con visor, con la mesa piloto conectada a los sensores reales de la maqueta.">
+<meta name="theme-color" content="#0b1220">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b1220'/%3E%3Crect x='14' y='26' width='36' height='12' rx='3' fill='%237c5a3a'/%3E%3Crect x='14' y='12' width='14' height='10' rx='3' fill='%2322c55e'/%3E%3Crect x='36' y='12' width='14' height='10' rx='3' fill='%23ef4444'/%3E%3Crect x='14' y='42' width='14' height='10' rx='3' fill='%2322c55e'/%3E%3Crect x='36' y='42' width='14' height='10' rx='3' fill='%2322c55e'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="estilos.css">
+<link rel="stylesheet" href="estilos-app.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="vista3d" aria-label="Vista 3D"></div>
+
+<header id="barra">
+  <div class="marca">
+    <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0f1a30"/><rect x="14" y="26" width="36" height="12" rx="3" fill="#7c5a3a"/><rect x="14" y="12" width="14" height="10" rx="3" fill="#22c55e"/><rect x="36" y="12" width="14" height="10" rx="3" fill="#ef4444"/><rect x="14" y="42" width="14" height="10" rx="3" fill="#22c55e"/><rect x="36" y="42" width="14" height="10" rx="3" fill="#22c55e"/></svg>
+    <span>BiblioAforo <b>VR</b></span>
+  </div>
+  <nav class="modos" aria-label="Modos">
+    <button data-modo="estudiante" class="activo">Estudiante</button>
+    <button data-modo="admin">Administración</button>
+    <button data-modo="tecnico">Cómo funciona</button>
+  </nav>
+  <div class="derecha">
+    <span id="insignia" class="pill sim" title="Origen de los datos"><i></i><span>Simulación</span></span>
+    <div class="segmento" role="group" aria-label="Origen de los datos">
+      <button data-fuente="sim" aria-pressed="true">Simulación</button>
+      <button data-fuente="real" aria-pressed="false">Datos reales</button>
+    </div>
+    <button id="dispositivos" class="dispositivos" title="Sensores de la maqueta (clic para conectar)"><span><i></i>ESP32</span><span><i></i>ESP32-CAM</span></button>
+    <button id="btnVR" class="primario">Conectar visor 3D</button>
+    <button id="btnMR" class="secundario" hidden>Realidad mixta</button>
+    <button id="btnAyuda" class="icono" title="Ayuda (H)" aria-label="Ayuda">?</button>
+  </div>
+</header>
+
+<section id="mapa" hidden aria-label="Mapa del piso">
+  <div id="mapaBarra" class="mapa-barra"></div>
+  <div id="mapaLienzo" class="mapa-lienzo"></div>
+</section>
+
+<aside id="panel" aria-label="Panel">
+  <div class="pestanas" role="tablist">
+    <button id="btnPlegar" class="plegar" title="Ocultar panel" aria-label="Ocultar panel">›</button>
+  </div>
+  <div id="contenidoPanel"></div>
+</aside>
+<button id="btnDesplegar" class="desplegar" hidden aria-label="Mostrar panel">‹ Panel</button>
+
+<div id="pistas" aria-live="polite"></div>
+
+<figure id="pip" hidden>
+  <canvas id="pipLienzo" width="640" height="544"></canvas>
+  <figcaption>Vista de la ESP32-CAM <button id="pipCerrar" aria-label="Cerrar">×</button></figcaption>
+</figure>
+
+<section id="recorrido" hidden aria-live="polite"></section>
+
+<div id="cargando"><div><b>BiblioAforo VR</b><span>Preparando la biblioteca…</span></div></div>
+
+<div id="dialogo" class="dialogo" hidden role="dialog" aria-modal="true">
+  <div class="caja-dialogo">
+    <button class="cerrar" id="dialogoCerrar" aria-label="Cerrar">×</button>
+    <div id="dialogoCuerpo"></div>
+  </div>
+</div>
+
+<div id="avisos" aria-live="polite"></div>
+<noscript><p class="sin-js">BiblioAforo VR necesita JavaScript y WebGL.</p></noscript>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
