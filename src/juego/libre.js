@@ -184,6 +184,7 @@ export class Libre {
 
   #sentarse(a) {
     if (this.m.sentandoseEn(a.id)) { this.son.error(); return; }
+    if (!this.m.puedeOcuparJugador(a.id)) { this.son.error(); H.banner('Mesa piloto con datos reales', 'info', 'Este asiento es el de la maqueta: se ocupa sentando una silueta en la maqueta física.', 3600); return; }
     const antes = this.b.libres(a.piso);
     this.tuyo = a;
     this.#quitarDestino();

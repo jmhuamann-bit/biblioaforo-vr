@@ -347,11 +347,27 @@ export class Multitud extends Emisor {
 
   // ------------------------------------------------------------ cambios de asiento (pasan por la "cámara")
   #fijar(id, ocupado, opc = {}) {
-    this.verdad.set(id, { ocupado, objeto: !!opc.objeto });
     const a = this.estado.get(id);
+    if (a.piloto && this.estado.pilotoReal) return;  // con datos reales, la mesa piloto solo la cambia la maqueta
+    this.verdad.set(id, { ocupado, objeto: !!opc.objeto });
     if (this.camarasCaidas.has(a.mesa)) return;     // sin cámara: el sistema no se entera
     this.estado.fijar(id, ocupado, opc);
   }
+
+  // Al pasar a datos reales, la mesa piloto deja de ser de la simulación: quien estaba sentado ahí
+  // (simulado) se levanta y sale por la puerta, así el conteo de personas sigue cuadrando.
+  soltarPiloto() {
+    for (const p of PLANO.mesaPiloto.asientos) {
+      const o = this.ocupantes.get(p.id);
+      if (o) this.#levantar(p.id, o, { sinObjeto: true });
+      const r = this.reservas.get(p.id);
+      if (r) this.reservas.delete(p.id);
+      this.verdad.delete(p.id);
+    }
+  }
+
+  // ¿Puede el jugador sentarse ahí? (la mesa piloto con datos reales es la maqueta física)
+  puedeOcuparJugador(id) { const a = this.estado.get(id); return !!a && !(a.piloto && this.estado.pilotoReal); }
   #sentarSinAnimacion(id, contar = false) {
     if (contar) this.estado.entrar(1);
     this.#fijar(id, true);
@@ -359,7 +375,7 @@ export class Multitud extends Emisor {
   }
 
   // El jugador se sienta / se levanta
-  ocuparPorJugador(id) { this.#fijar(id, true, { estudiante: true }); }
+  ocuparPorJugador(id) { if (!this.puedeOcuparJugador(id)) return false; this.#fijar(id, true, { estudiante: true }); return true; }
   liberarPorJugador(id) { this.#fijar(id, false, { estudiante: true }); }
 
   // ¿Alguien se está sentando justo ahora en ese asiento? (la cámara aún no lo confirma)
@@ -532,7 +548,7 @@ export class Multitud extends Emisor {
         this.#fijar(ag.asientoDejado, false);
         const s = this.estado.get(ag.cambiaA);
         ag.cambiaA = null; ag.estado = 'caminando';
-        if (s.ocupado || s.sinDato) { this.#reubicar(ag); return; }
+        if (s.ocupado || s.sinDato || (s.piloto && this.estado.pilotoReal)) { this.#reubicar(ag); return; }
         this.#seguir(ag, rutaInterior({ x: ag.x, z: ag.z, piso: ag.piso }, { x: s.x, z: s.z, piso: s.piso }, s));
         return;
       }
@@ -602,7 +618,7 @@ export class Multitud extends Emisor {
     // llegó al final de su ruta
     if (ag.destino === 'asiento') {
       const s = this.estado.get(ag.asiento);
-      if (s.ocupado || s.sinDato) { this.#reubicar(ag); return; }
+      if (s.ocupado || s.sinDato || (s.piloto && this.estado.pilotoReal)) { this.#reubicar(ag); return; }
       ag.estado = 'sentandose'; ag.t = CONFIRMACION_S;   // de pie junto a la silla hasta que la cámara lo confirme
     } else if (ag.destino === 'espera') {
       ag.t = (ag.t || 0) + dt;

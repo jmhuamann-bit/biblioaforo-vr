@@ -290,7 +290,7 @@ export class Detective {
       ${cliente ? `<p class="nota" style="margin:0">${mi.cliente} ${cliente > 1 ? 'vienen' : 'viene'} desde la plaza: cruzará${cliente > 1 ? 'n' : ''} el sensor S1 y la cámara de la mesa ${a.mesa} confirmará el asiento.</p>` : ''}
       <p class="nota">${mejor && mejor.a.id !== a.id ? `La mejor opción en este momento era <b>${mejor.a.id}</b>, a ${Math.round(mejor.metros)} m.` : '¡Era la mejor opción posible en este momento!'} ${mi.extra && !ev.extra.ok ? `(Faltó el extra: ${mi.extra[0].toLowerCase()}.)` : ''} ${this.uso.pista ? 'Usaste la pista: máximo 2 ★.' : ''}</p>
       <p class="mini">3 ★: cumple todo y está a menos de 1,3 veces la distancia de la mejor opción. Cada intento fallido resta una estrella.</p>
-      <div class="fila"><button class="primario" data-r="sig">${ultima ? 'Ver el resumen' : 'Siguiente misión'}</button>${mi.cliente === 'Tú' ? '<button data-r="sentar">Sentarme aquí y mirar</button>' : ''}</div>`,
+      <div class="fila"><button class="primario" data-r="sig">${ultima ? 'Ver el resumen' : 'Siguiente misión'}</button>${mi.cliente === 'Tú' && this.m.puedeOcuparJugador(a.id) ? '<button data-r="sentar">Sentarme aquí y mirar</button>' : ''}</div>`,
     (r) => r.addEventListener('click', (e) => {
       const d = e.target.closest('[data-r]')?.dataset.r;
       if (d === 'sig') { H.cerrarResultado(); this.#siguiente(); }
@@ -310,7 +310,7 @@ export class Detective {
   }
 
   #sentarYMirar(a) {
-    if (this.b.estadoDe(a) !== 'libre') return;
+    if (this.b.estadoDe(a) !== 'libre' || !this.m.puedeOcuparJugador(a.id)) return;
     this.sentado = a;
     this.m.ocuparPorJugador(a.id);
     this.esc.marcar({ tuyo: a.id, elegido: null });

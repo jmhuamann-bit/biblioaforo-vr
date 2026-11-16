@@ -85,6 +85,7 @@ class App {
     this.escenas.maqueta.camara.alDibujar = (lienzo) => this.hud.dibujarPip(lienzo);
     this.fuentes.on('modo', () => { this.#actualizarFuente(); if (this.modo === 'ingenieria' && this.hud.pestana === 'simular') this.hud.refrescarPestana(); this.actualizarPistas(); });
     this.fuentes.on('cambio', () => this.#actualizarFuente());
+    this.fuentes.on('modo', () => { if (this.biblio.pilotoReal) this.multitud.soltarPiloto(); });
     this.fuentes.on('aviso', (a) => this.hud.aviso(a.texto, a.tipo));
     this.estado.on('cambio', () => { this.cambioDispositivos = true; });
 

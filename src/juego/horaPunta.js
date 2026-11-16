@@ -21,6 +21,7 @@ export function masCercanos(app, origen, { k = 1, piso = null, excluir = null } 
   const lista = [];
   for (const a of app.biblio.asientos) {
     if (a.ocupado || a.sinDato || a.estudiante || a.id === excluir || (piso && a.piso !== piso)) continue;
+    if (!app.multitud.puedeOcuparJugador(a.id)) continue;
     if (app.multitud.sentandoseEn(a.id)) continue;
     const m = distanciaAsiento(campos, a) + extra;
     if (Number.isFinite(m)) lista.push({ asiento: a, metros: m });
@@ -177,6 +178,11 @@ export class HoraPunta {
   // ---------------------------------------------------------------- elegir asiento
   elegir(a, { automatico = false } = {}) {
     if (!a || this.fase !== 'jugando') return false;
+    if (!this.m.puedeOcuparJugador(a.id)) {
+      this.son.error();
+      H.banner('Mesa piloto con datos reales', 'alerta', 'Sus asientos son los de la maqueta física: muestran lo que ve la ESP32-CAM real. Elige otra mesa.', 3600);
+      return false;
+    }
     const e = this.b.estadoDe(a);
     if (e !== 'libre' || this.m.sentandoseEn(a.id)) {
       this.son.error();
@@ -376,6 +382,7 @@ export class HoraPunta {
   }
 
   #sentarse(a) {
+    if (!this.m.puedeOcuparJugador(a.id)) { this.elegir(a); return; }
     if (!this.dentro) { this.son.error(); H.banner('Primero entra a la biblioteca', 'info', 'Por la puerta de ENTRADA: el sensor S1 te cuenta.', 2600); return; }
     if (this.b.estadoDe(a) !== 'libre' || this.m.sentandoseEn(a.id)) { this.son.error(); H.banner(`El asiento ${a.id} ya no está libre`, 'alerta', '', 2200); return; }
     const libresAntes = this.b.libres(a.piso);

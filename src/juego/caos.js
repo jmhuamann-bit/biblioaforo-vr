@@ -5,7 +5,7 @@
 import { PLANO, yPiso } from '../biblioteca/plano.js';
 import { ESCENARIOS } from '../biblioteca/simulador.js';
 import { NOMBRE_ENTORNO } from '../biblioteca/agentes.js';
-import { grafico } from '../ui/admin.js';
+import { grafico, dispositivos, descargarTodo } from '../ui/admin.js';
 import { escapar } from '../ui/hud.js';
 import { describirObjeto } from './jugador.js';
 import * as H from './hudJuego.js';
@@ -393,6 +393,12 @@ export class Caos {
                 <svg class="grafico-dia" data-v="grafico" viewBox="0 0 640 260" role="img" aria-label="Gráfico del día"></svg>
                 <div class="leyenda"><span><i style="background:#38bdf8"></i>Personas dentro (puertas)</span><span><i style="background:#ef4444"></i>Asientos ocupados (cámaras)</span></div>
               </div>
+              <div class="tarjeta">
+                <h3>Dispositivos <small>qué es real y qué es simulado</small></h3>
+                <ul class="disp" data-v="disp"></ul>
+                <div class="piloto-puerta" data-v="puertaPiloto"></div>
+                <div class="fila" style="margin-top:8px"><button data-a="conectar">Conectar sensores</button><button data-a="descargar">Descargar registro</button></div>
+              </div>
               <div class="tarjeta"><h3>Registro del sistema</h3><ul class="eventos" data-v="eventos"></ul></div>
               <p class="mini">Todo lo de este modo es simulado. Con datos reales conectados, la mesa piloto 1-01 sigue a la maqueta y no se puede cambiar desde aquí.</p>
             </div>`,
@@ -411,6 +417,8 @@ export class Caos {
                 app.hud.refrescarPestana();
                 return;
               }
+              if (d.a === 'conectar') { app.dialogoConectar(); return; }
+              if (d.a === 'descargar') { descargarTodo(app); return; }
               if (d.a) this.accion(d.a);
             });
             v(r, 'azar').addEventListener('change', (e) => { m.aleatorios = e.target.checked; });
@@ -437,7 +445,7 @@ export class Caos {
             r.querySelector('[data-a="pausa"]').setAttribute('aria-pressed', String(sim.pausa));
             r.querySelectorAll('[data-esc]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.esc === sim.escenario)));
             tGrafico -= 0.12;
-            if (tGrafico <= 0) { tGrafico = 1; grafico(v(r, 'grafico'), b); }
+            if (tGrafico <= 0) { tGrafico = 1; grafico(v(r, 'grafico'), b); dispositivos(v(r, 'disp'), v(r, 'puertaPiloto'), app); }
             const evs = b.eventos;
             if (evs.length && evs[evs.length - 1].t !== ultimoEvento) {
               ultimoEvento = evs[evs.length - 1].t;
