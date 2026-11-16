@@ -1,7 +1,7 @@
 // Visor 3D (WebXR): Meta Quest 3, Quest con Link/Air Link, SteamVR. Realidad virtual y mixta.
 //  · Stick izquierdo: caminar · Stick derecho: girar (← →) y teletransporte (↑ y soltar)
-//  · Gatillo: pulsar botones y elegir asientos en el tablero · A: acción del paso
-//  · B: tablero · X: cambiar de piso (biblioteca) / entra una persona (maqueta) · Y: ayuda
+//  · Gatillo: apuntar con el rayo a un asiento, una mesa, un sensor o un botón del tablero
+//  · A: acción principal de la experiencia · B: tablero · X: piso del mapa / entra una persona (maqueta) · Y: ayuda
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
@@ -9,10 +9,12 @@ import { Panel3D, dibujarGlifo } from './panel3d.js';
 import { dibujarTablero } from '../ui/tablero.js';
 import { FUENTE, rectRedondo } from '../motor/textos.js';
 import { MAQUETA as M } from '../config.js';
-import { yPiso } from '../biblioteca/plano.js';
+import { PLANO, yPiso } from '../biblioteca/plano.js';
+import { alBanner } from '../juego/hudJuego.js';
 
 const ARRIBA = new THREE.Vector3(0, 1, 0);
 const zonaMuerta = (v, z = 0.18) => (Math.abs(v) < z ? 0 : (v - Math.sign(v) * z) / (1 - z));
+const COLOR_ASIENTO = { libre: '#22c55e', ocupado: '#ef4444', objeto: '#f59e0b', sinDato: '#64748b', tuyo: '#38bdf8' };
 
 export class ControlVR {
   constructor(app) {
@@ -28,6 +30,7 @@ export class ControlVR {
     this.controles = [];
     this.paneles = [];
     this.raycaster = new THREE.Raycaster();
+    this.rayMundo = new THREE.Raycaster();
     this.tmpM = new THREE.Matrix4();
     this.tmpV = new THREE.Vector3();
     this.tmpV2 = new THREE.Vector3();
@@ -35,11 +38,15 @@ export class ControlVR {
     this.agarre = null;
     this.tGiro = 0;
     this.nivel = 1;
+    this.pisoMapa = 1;
     this.mostrarPistas = true;
+    this.ultimaPos = null;
+    this.tMundo = 0;
     this.#crearControles();
     this.#crearPaneles();
     this.#crearTeleport();
     this.renderer.xr.addEventListener('sessionend', () => this.#alTerminar());
+    alBanner((texto, tipo, sub, ms) => this.banner(texto, tipo, sub, ms));
   }
 
   get presentando() { return !!this.sesion; }
@@ -51,8 +58,11 @@ export class ControlVR {
   async entrar(modo = 'vr') {
     if (this.sesion) return;
     const ar = modo === 'ar';
-    if (ar && this.app.modo !== 'tecnico') this.app.irModo('tecnico');
-    if (!ar && this.app.modo === 'admin') this.app.irModo('estudiante');
+    if (ar && this.app.modo !== 'ingenieria') await this.app.irModo('ingenieria');
+    // pose de escritorio: en el visor empiezas donde estabas caminando
+    const ctl = this.app.control, cam = this.camara;
+    this.previa = this.app.escenaActual === 'biblioteca' && ctl.modo === 'caminar' && this.app.jugador.activo
+      ? { x: cam.position.x, z: cam.position.z, piso: this.app.jugador.nivel, rumbo: ctl.paseo.yaw } : null;
     const opciones = ar
       ? { requiredFeatures: ['local-floor'], optionalFeatures: ['hand-tracking', 'hit-test', 'layers'] }
       : { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking', 'layers'] };
@@ -78,6 +88,7 @@ export class ControlVR {
     this.camara.near = 0.02; this.camara.far = 300; this.camara.updateProjectionMatrix();
     if (ar) await this.#prepararAR(true);
     this.escala = 'mesa';
+    this.pisoMapa = this.previa?.piso || 1;
     // la cámara aún tiene la pose de escritorio: se borra para colocar al usuario con la primera pose real del visor
     this.camara.position.set(0, 0, 0);
     this.cuadrosSesion = 0;
@@ -86,7 +97,9 @@ export class ControlVR {
     this.panelAyuda.malla.visible = true;
     this.panelTablero.malla.visible = false;
     this.escenaActual.scene.add(this.arco, this.anillo);
-    if (this.enBiblioteca) { this.app.estudiante.detener(); this.app.estudiante.iniciar(); }
+    this.app.mapaJuego?.cerrar();
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    this.app.modoActual?.alEntrarVR?.();
     this.#actualizarPaneles(true);
     this.app.hud.aviso(ar ? 'Realidad mixta activa: mira tu mesa y aprieta el gatillo para colocar la maqueta.' : 'Visor activo.', 'ok');
   }
@@ -109,9 +122,14 @@ export class ControlVR {
     this.arco.visible = false; this.anillo.visible = false;
     // los paneles del visor no deben quedar flotando en la vista de escritorio
     for (const p of this.paneles) p.malla.visible = false;
+    this.panelInfo.malla.visible = false;
+    this.panelBanner.malla.visible = false;
     this.motor.redimensionar();
-    if (this.app.modo === 'tecnico') this.app.vistaMaqueta('general', false);
-    else if (this.app.modo === 'estudiante') { this.app.estudiante.detener(); this.app.estudiante.iniciar(); }
+    const m = this.app.modoActual;
+    if (this.app.escenaActual === 'maqueta') this.app.vistaMaqueta('general', false);
+    else if (m?.alSalirVR) m.alSalirVR(this.ultimaPos);
+    else if (this.app.jugador.activo && this.ultimaPos) this.app.jugador.iniciar({ ...this.ultimaPos, conservar: true });
+    this.app.actualizarPistas();
   }
 
   alCambiarEscena() {
@@ -120,17 +138,23 @@ export class ControlVR {
     this.#soltar();
     // el rig (con controles y paneles) ya viaja con la escena; el arco se agrega a la nueva
     this.escenaActual.scene.add(this.arco, this.anillo);
+    this.app.modoActual?.alEntrarVR?.();
     this.pendienteColocar = this.#posicionInicial();
     this.#actualizarPaneles(true);
   }
+
+  mostrarTablero() { this.panelTablero.malla.visible = true; this.panelAyuda.malla.visible = false; this.inicioPendiente = false; this.refrescar(); }
 
   #posicionInicial() {
     const esc = this.escenaActual;
     if (this.modo === 'ar') return { ar: true };
     if (this.app.escenaActual === 'maqueta') return { ...esc.inicioMesa(), escala: 1 };
-    const est = this.app.estudiante;
-    if (est.entro) return { x: est.pos.x, y: yPiso(est.pos.piso || 1), z: est.pos.z, rumbo: 0, escala: 1 };
-    return { ...esc.vrInicio(), escala: 1 };
+    const m = this.app.modoActual, j = this.app.jugador;
+    const sentado = m?.asientoVR?.();
+    if (sentado) return { sentarEn: sentado };
+    const p = this.previa || (j.activo && j.inicio) || m?.inicioVR?.() || esc.vrInicio();
+    this.previa = null;
+    return { x: p.x, y: yPiso(p.piso || 1), z: p.z, rumbo: p.rumbo || 0, escala: 1 };
   }
 
   // Coloca al usuario: sus pies en (x,y,z) mirando hacia "rumbo" (0 = hacia -z)
@@ -155,27 +179,7 @@ export class ControlVR {
 
   refrescar() { this.tPaneles = 0; }
 
-  // ================================================================ biblioteca: ruta por tramos y sentarse
-  siguienteTramo() {
-    const est = this.app.estudiante;
-    const r = est.rutaActual;
-    if (!r) return;
-    const cab = this.posicionCabeza(new THREE.Vector3());
-    // punto de la ruta más cercano a la cabeza y el siguiente a unos 6 m o el próximo giro
-    let mejor = 0, dMin = Infinity;
-    r.pts.forEach((p, i) => { const d = Math.hypot(p.x - cab.x, p.z - cab.z) + Math.abs(p.y - (this.rig.position.y)) * 2; if (d < dMin) { dMin = d; mejor = i; } });
-    let i = Math.min(r.pts.length - 1, mejor + 1);
-    while (i < r.pts.length - 1 && Math.hypot(r.pts[i].x - cab.x, r.pts[i].z - cab.z) < 1.2) i++;
-    const p = r.pts[i];
-    const q = r.pts[Math.min(r.pts.length - 1, i + 1)];
-    const rumbo = i < r.pts.length - 1 ? Math.atan2(-(q.x - p.x), -(q.z - p.z)) : this.rig.rotation.y;
-    this.#fundido();
-    this.colocar({ x: p.x, y: p.y, z: p.z, rumbo, escala: 1 });
-    est.pos = { x: p.x, z: p.z, piso: p.y > 3.4 ? 2 : 1 };
-    this.#vibrar(0.5, 60, 'right');
-    if (i >= r.pts.length - 1) est.sentarse();
-  }
-
+  // ================================================================ biblioteca: sentarse
   sentar(a) {
     if (!a) return;
     // sentado: la vista baja ~0.42 m y mira hacia la mesa
@@ -183,8 +187,6 @@ export class ControlVR {
     this.colocar({ x: a.x, y: yPiso(a.piso) - 0.42, z: a.z - a.mira * 0.1, rumbo, escala: 1 });
     this.nivel = a.piso;
   }
-
-  #fundido() { /* el salto es instantáneo; el anillo y la vibración marcan el destino */ }
 
   // ================================================================ escala 1:17 (maqueta)
   alternarEscala() {
@@ -274,12 +276,13 @@ export class ControlVR {
       const cursor = new THREE.Mesh(new THREE.SphereGeometry(0.008, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
       cursor.visible = false;
       controller.add(cursor);
-      const c = { i, controller, grip, mano, rayo, cursor, fuente: null, lado: null, previos: [], hover: null, pistas: null };
+      const c = { i, controller, grip, mano, rayo, cursor, fuente: null, lado: null, previos: [], hover: null, mundo: null, pistas: null };
       controller.addEventListener('connected', (e) => {
         c.fuente = e.data;
         c.lado = e.data.handedness;
         rayo.visible = e.data.targetRayMode === 'tracked-pointer';
         this.#crearPistasControl(c);
+        if (c.lado === 'right') { controller.add(this.panelInfo.malla); this.panelInfo.malla.position.set(0, 0.075, -0.16); this.panelInfo.malla.rotation.set(-0.5, 0, 0); }
       });
       controller.addEventListener('disconnected', () => { c.fuente = null; rayo.visible = false; });
       controller.addEventListener('selectstart', () => this.#gatillo(c));
@@ -314,7 +317,70 @@ export class ControlVR {
       g.position.set(p.x, p.y + M.base.grosor, p.z);
       g.rotation.set(0, this.rumboCabeza(), 0);
       this.#vibrar(0.7, 120);
+      return;
     }
+    if (c.mundo) this.#accionMundo(c.mundo, c);
+  }
+
+  // Lo que hay en el mundo bajo el rayo de un control (asiento, mesa, estudiante, sensor, silla de la maqueta…)
+  #elegirMundo(ray) {
+    const m = this.app.modoActual;
+    if (this.app.escenaActual === 'maqueta') return this.escala === 'mesa' && m?.elegir ? m.elegir(ray) : null;
+    if (!m?.describir) return null;
+    ray.far = 30 * this.escalaRig;
+    return this.app.jugador.elegirEn(ray);
+  }
+
+  #accionMundo(h, c) {
+    const m = this.app.modoActual;
+    if (!m) return;
+    if (m.interactuarVR) m.interactuarVR(h);
+    else if (this.app.escenaActual === 'maqueta' || this.app.modo === 'caos') m.alClic?.(h);
+    else m.interactuar?.(h);
+    this.#vibrar(0.35, 40, c?.lado);
+    this.refrescar();
+  }
+
+  // ================================================================ avisos dentro del visor
+  // Los carteles de la pantalla no se ven con el visor puesto: se repiten aquí
+  banner(texto, tipo = 'info', sub = '', ms = 3200) {
+    if (!this.sesion) return;
+    this.textoBanner = { texto, tipo, sub };
+    this.panelBanner.marcar();
+    this.panelBanner.malla.visible = true;
+    clearTimeout(this.tBanner);
+    this.tBanner = setTimeout(() => { this.panelBanner.malla.visible = false; }, Math.max(2500, ms));
+  }
+
+  #dibujarBanner(ctx, w, h) {
+    const b = this.textoBanner || { texto: '', tipo: 'info', sub: '' };
+    const col = { alerta: ['rgba(127,29,29,0.94)', '#ef4444'], ok: ['rgba(20,83,45,0.94)', '#22c55e'], info: ['rgba(8,47,73,0.94)', '#38bdf8'] }[b.tipo] || ['rgba(8,47,73,0.94)', '#38bdf8'];
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = col[0]; rectRedondo(ctx, 4, 4, w - 8, h - 8, 36); ctx.fill();
+    ctx.strokeStyle = col[1]; ctx.lineWidth = 6; ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#f8fafc'; ctx.font = `800 56px ${FUENTE}`;
+    ctx.fillText(b.texto, w / 2, b.sub ? 92 : h / 2 + 18, w - 60);
+    if (b.sub) {
+      ctx.font = `500 34px ${FUENTE}`; ctx.fillStyle = '#e2e8f0';
+      const palabras = String(b.sub).split(' ');
+      const lineas = []; let l = '';
+      for (const p of palabras) { const prueba = l ? `${l} ${p}` : p; if (ctx.measureText(prueba).width > w - 90) { lineas.push(l); l = p; } else l = prueba; }
+      if (l) lineas.push(l);
+      lineas.slice(0, 3).forEach((x, k) => ctx.fillText(x, w / 2, 152 + k * 44));
+    }
+  }
+
+  #dibujarInfo(ctx, w, h) {
+    const i = this.infoActual;
+    ctx.clearRect(0, 0, w, h);
+    if (!i) return;
+    ctx.fillStyle = 'rgba(11,18,32,0.92)'; rectRedondo(ctx, 0, 0, w, h, 30); ctx.fill();
+    ctx.strokeStyle = i.alerta ? '#ef4444' : 'rgba(56,189,248,0.7)'; ctx.lineWidth = 5; ctx.stroke();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#e0f2fe'; ctx.font = `800 40px ${FUENTE}`;
+    ctx.fillText(i.titulo, 26, 58, w - 52);
+    ctx.font = `500 28px ${FUENTE}`; ctx.fillStyle = '#94a3b8';
+    if (i.detalle) ctx.fillText(String(i.detalle).replace(/<[^>]+>/g, ''), 26, 104, w - 52);
+    if (i.accion) { ctx.fillStyle = '#7dd3fc'; ctx.font = `700 32px ${FUENTE}`; ctx.fillText(`Gatillo · ${i.accion.replace(/^(E|Clic) · /, '')}`, 26, 152, w - 52); }
   }
 
   // ================================================================ paneles
@@ -333,6 +399,16 @@ export class ControlVR {
     this.panelCamara.malla.rotation.y = -0.62;
     this.panelRecorrido.malla.position.set(0, 0.98, -0.8);
     this.panelRecorrido.malla.rotation.x = -0.45;
+    // aviso del juego (pegado a la vista) y ficha de lo que apunta el rayo (sobre el control derecho)
+    this.panelBanner = new Panel3D({ ancho: 0.9, alto: 0.24, px: 1300, nombre: 'bannerVR', dibujar: (ctx, w, h) => this.#dibujarBanner(ctx, w, h) });
+    this.panelBanner.malla.position.set(0, -0.2, -1.0);
+    this.panelBanner.malla.renderOrder = 40;
+    this.panelBanner.material.depthTest = false;
+    this.panelBanner.malla.visible = false;
+    this.camara.add(this.panelBanner.malla);
+    this.panelInfo = new Panel3D({ ancho: 0.3, alto: 0.0975, px: 960, nombre: 'infoVR', dibujar: (ctx, w, h) => this.#dibujarInfo(ctx, w, h) });
+    this.panelInfo.malla.visible = false;
+    this.panelInfo.malla.renderOrder = 35;
     this.tPaneles = 0;
   }
 
@@ -350,7 +426,7 @@ export class ControlVR {
     };
     if (enMaqueta) {
       fila(H - 240, [
-        { id: 'biblioteca', texto: 'Biblioteca', fn: () => app.irModo('estudiante') },
+        { id: 'menu', texto: 'Experiencias', fn: () => app.irModo('menu') },
         { id: 'sim', texto: sim ? 'Simulando ✓' : 'Simular datos', fn: () => app.alternarSimulacion(), activo: sim },
         { id: 'escala', texto: this.escala === 'humana' ? 'Volver a la mesa' : 'Entrar 1:17', fn: () => this.alternarEscala(), glifo: 'A', deshabilitado: this.modo === 'ar' },
         { id: 'recorrido', texto: 'Recorrido', fn: async () => { await app.abrirRecorrido(); this.panelRecorrido.malla.visible = true; this.refrescar(); }, activo: !!app.recorrido?.abierto },
@@ -365,26 +441,91 @@ export class ControlVR {
         { id: 'luz', texto: 'Luz', fn: () => app.accion('luz') },
         { id: 'calibrar', texto: 'Recalibrar', fn: () => app.accion('calibrar') },
       ]);
+      p.dibujarContenido = (ctx, w, h) => this.#dibujarTablero(ctx, w, h);
     } else {
-      // biblioteca: asientos del mapa (registrados al dibujar) y acciones del estudiante
-      p.dibujarContenido = (ctx, w, h) => {
-        this.#dibujarTablero(ctx, w, h);
-        // los asientos se registran después de dibujar el mapa (necesitan su escala)
-        const acciones = p.botones.filter((b) => !b.id.startsWith('asiento:'));
-        p.botones = [];
-        app.estudiante.botonesVR(p, W, H);
-        p.botones.push(...acciones);
-      };
+      const m = app.modoActual;
+      p.dibujarContenido = (ctx, w, h) => this.#dibujarTablero(ctx, w, h);
+      if (app.modo !== 'menu') this.#botonesMapa(p, W, H - 270);
       fila(H - 240, [
-        { id: 'maqueta', texto: 'Cómo funciona', fn: () => app.irModo('tecnico') },
+        { id: 'menu', texto: 'Experiencias', fn: () => app.irModo('menu'), activo: app.modo === 'menu' },
+        { id: 'pisoMapa', texto: `Mapa: piso ${this.pisoMapa}`, fn: () => { this.pisoMapa = this.pisoMapa === 1 ? 2 : 1; this.refrescar(); }, glifo: 'X', deshabilitado: app.modo === 'menu' },
         { id: 'sim', texto: sim ? 'Simulando ✓' : 'Datos reales', fn: () => app.alternarSimulacion(), activo: sim },
         { id: 'salir', texto: 'Salir del visor', fn: () => this.salir(), acento: '#f87171' },
       ]);
-      fila(H - 128, app.estudiante.botonesVR({ boton: () => {} }, W, H).map((b) => ({ ...b })));
+      const extra = [...(m?.botonesVR?.() || [])];
+      if (m?.accionA && app.modo !== 'menu') extra.unshift({ id: 'accionA', texto: m.textoA?.() || 'Acción', fn: () => this.#botonA(), glifo: 'A' });
+      if (extra.length) fila(H - 128, extra.slice(0, 6));
     }
-    if (enMaqueta) p.dibujarContenido = (ctx, w, h) => this.#dibujarTablero(ctx, w, h);
     p.marcar();
     if (forzar) { this.panelAyuda.marcar(); this.panelRecorrido.marcar(); }
+  }
+
+  // Mapa del tablero: cada asiento es un botón (se elige con el gatillo)
+  #transformarMapa(w, h) {
+    const top = 178, m = 26;
+    const esc = Math.min((w - m * 2) / (PLANO.x1 - PLANO.x0), (h - top - m) / (PLANO.z1 - PLANO.z0));
+    const ox = (w - (PLANO.x1 - PLANO.x0) * esc) / 2;
+    return { esc, X: (x) => ox + (x - PLANO.x0) * esc, Y: (z) => top + (z - PLANO.z0) * esc };
+  }
+
+  #botonesMapa(p, w, h) {
+    const T = this.#transformarMapa(w, h);
+    const s = Math.max(16, 0.8 * T.esc);
+    for (const a of this.app.biblio.asientos) {
+      if (a.piso !== this.pisoMapa) continue;
+      p.boton(`asiento:${a.id}`, T.X(a.x) - s / 2, T.Y(a.z) - s / 2, s, s, '', () => this.#elegirAsientoTablero(a), {
+        dibujar: (ctx, b, hover) => { if (!hover) return; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(b.x + b.w / 2, b.y + b.h / 2, b.w * 0.75, 0, Math.PI * 2); ctx.stroke(); },
+      });
+    }
+  }
+
+  #elegirAsientoTablero(a) {
+    const m = this.app.modoActual;
+    const h = { tipo: 'asiento', id: a.id, distancia: 0 };
+    if (m?.alClic) m.alClic(h);
+    else m?.interactuar?.(h);
+  }
+
+  #dibujarMapa(ctx, w, h) {
+    const app = this.app, b = app.biblio, m = app.modoActual;
+    ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, w, h);
+    const lineas = m?.lineasVR?.() || ['BIBLIOAFORO VR'];
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#e0f2fe'; ctx.font = `800 50px ${FUENTE}`; ctx.fillText(lineas[0], 34, 66, w - 68);
+    ctx.font = `600 32px ${FUENTE}`; ctx.fillStyle = '#cbd5e1';
+    lineas.slice(1, 3).forEach((l, k) => ctx.fillText(l, 34, 112 + k * 40, w - 68));
+    if (app.modo === 'menu') {
+      ctx.fillStyle = '#94a3b8'; ctx.font = `500 34px ${FUENTE}`;
+      ctx.fillText(`Ahora: ${b.hora()} · ${b.puertas.dentro} personas dentro · ${b.libres()} asientos libres`, 34, 230, w - 68);
+      ctx.fillText('Elige una experiencia con el gatillo (abajo).', 34, 290, w - 68);
+      return;
+    }
+    const piso = this.pisoMapa;
+    const T = this.#transformarMapa(w, h);
+    ctx.fillStyle = '#1b2740'; ctx.fillRect(T.X(PLANO.x0), T.Y(PLANO.z0), (PLANO.x1 - PLANO.x0) * T.esc, (PLANO.z1 - PLANO.z0) * T.esc);
+    const E = PLANO.escalera;
+    ctx.fillStyle = '#2b3a57'; ctx.fillRect(T.X(E.x0), T.Y(E.z0), (E.x1 - E.x0) * T.esc, (E.z1 - E.z0) * T.esc);
+    for (const mesa of PLANO.mesas) if (mesa.piso === piso) { ctx.fillStyle = mesa.asientos[0].piloto ? '#a3863c' : '#6b5039'; ctx.fillRect(T.X(mesa.x - 1.2), T.Y(mesa.z - 0.5), 2.4 * T.esc, T.esc); }
+    const elegido = this.app.escenas.biblioteca.elegido;
+    for (const a of b.asientos) {
+      if (a.piso !== piso) continue;
+      const e = a.estudiante ? 'tuyo' : b.estadoDe(a);
+      ctx.fillStyle = COLOR_ASIENTO[e];
+      ctx.beginPath(); ctx.arc(T.X(a.x), T.Y(a.z), Math.max(5, T.esc * 0.32), 0, Math.PI * 2); ctx.fill();
+      if (a.id === elegido) { ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(T.X(a.x), T.Y(a.z), T.esc * 0.62, 0, Math.PI * 2); ctx.stroke(); }
+    }
+    ctx.fillStyle = 'rgba(226,232,240,0.8)';
+    for (const ag of app.multitud.agentes) if (ag.visible && ag.piso === piso && ag.z < PLANO.z1) { ctx.beginPath(); ctx.arc(T.X(ag.x), T.Y(ag.z), 4, 0, Math.PI * 2); ctx.fill(); }
+    const r = app.multitud.rival;
+    if (r && r.visible && r.piso === piso) { ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(T.X(r.x), T.Y(r.z), 9, 0, Math.PI * 2); ctx.fill(); }
+    const cab = this.posicionCabeza(this.tmpV);
+    if (this.nivel === piso && cab.z < PLANO.z1 + 0.5) {
+      ctx.save(); ctx.translate(T.X(cab.x), T.Y(cab.z)); ctx.rotate(-this.rumboCabeza() + Math.PI);
+      ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(11, 12); ctx.lineTo(0, 5); ctx.lineTo(-11, 12); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#4ade80'; ctx.font = `700 30px ${FUENTE}`; ctx.textAlign = 'right';
+    ctx.fillText(`Piso ${piso}: ${b.libres(piso)} libres · gatillo sobre un asiento`, w - 34, 160);
   }
 
   #dibujarTablero(ctx, w, h) {
@@ -397,7 +538,7 @@ export class ControlVR {
     if (app.escenaActual === 'maqueta') {
       dibujarTablero(ctx, w, altoTablero, { estado: app.estado, fuente: app.fuentes.modo, estadoAsiento: (i) => app.escenas.maqueta.estadoAsiento(i) });
     } else {
-      app.estudiante.dibujarVR(ctx, w, altoTablero);
+      this.#dibujarMapa(ctx, w, altoTablero);
     }
     ctx.restore();
     ctx.strokeStyle = 'rgba(56,189,248,0.35)'; ctx.lineWidth = 4;
@@ -415,16 +556,15 @@ export class ControlVR {
     ctx.fillText(this.modo === 'ar' ? 'Mira tu mesa y aprieta el gatillo para colocar la maqueta' : 'Aprieta el gatillo para empezar', w / 2, 142);
     const izq = [
       ['stick', 'Stick: caminar'],
-      ['X', lib ? 'Cambiar de piso en el mapa' : 'Entra una persona (simulación)'],
+      ['X', lib ? 'Piso del mapa del tablero' : 'Entra una persona (simulación)'],
       ['Y', 'Mostrar u ocultar esta ayuda'],
-      ['agarre', lib ? 'Gatillo: elegir un asiento verde' : 'Agarre: tomar y girar la maqueta'],
-      ['stick', 'Pulsar el stick: recentrar'],
+      ['agarre', lib ? 'Pulsar el stick: volver al inicio' : 'Agarre: tomar y girar la maqueta'],
     ];
     const der = [
       ['stick', 'Stick: ← → girar · ↑ teletransporte'],
-      ['A', lib ? 'Acción del paso: entrar, ir, siguiente tramo…' : 'Entrar o salir de la maqueta (1:17)'],
+      ['A', lib ? 'Acción principal (sentarse, el más cercano…)' : 'Entrar o salir de la maqueta (1:17)'],
       ['B', 'Mostrar u ocultar el tablero'],
-      ['gatillo', 'Gatillo: pulsar botones del tablero'],
+      ['gatillo', lib ? 'Gatillo: asientos, mesas y botones' : 'Gatillo: sillas, sensores y botones'],
     ];
     const col = (x, titulo, items) => {
       ctx.textAlign = 'left';
@@ -455,7 +595,7 @@ export class ControlVR {
     } else {
       const b = app.biblio;
       l1 = `Dentro ${b.puertas.dentro}/${b.puertas.aforo}`;
-      l2 = `Libres ${b.libres()}/332`;
+      l2 = `Libres ${b.libres()}/${b.total()}`;
     }
     const fuente = { sim: 'SIMULACIÓN', usb: 'DATOS REALES', remoto: 'DATOS REALES', espera: 'SIN DATOS' }[app.fuentes.modo];
     ctx.fillText(fuente, 30, 62);
@@ -468,18 +608,19 @@ export class ControlVR {
     if (c.pistas) c.grip.remove(c.pistas.malla);
     const der = c.lado === 'right';
     const panel = new Panel3D({
-      ancho: 0.17, alto: 0.11, px: 680, nombre: 'pistas-' + c.lado,
+      ancho: 0.17, alto: 0.11, px: 680, nombre: `pistas-${c.lado}`,
       dibujar: (ctx, w, h) => {
         const lib = this.enBiblioteca;
         ctx.fillStyle = 'rgba(11,18,32,0.82)'; rectRedondo(ctx, 0, 0, w, h, 30); ctx.fill();
+        const textoA = lib ? (this.app.modoActual?.textoA?.() || '—') : (this.escala === 'humana' ? 'Volver a la mesa' : 'Entrar 1:17');
         const items = der
-          ? [['A', lib ? this.app.estudiante.textoAccion() : (this.escala === 'humana' ? 'Volver a la mesa' : 'Entrar 1:17')], ['B', 'Tablero'], ['stick', '←→ girar · ↑ saltar']]
-          : [['X', lib ? 'Cambiar de piso' : 'Entra una persona'], ['Y', 'Ayuda'], ['stick', 'Caminar']];
+          ? [['A', textoA], ['B', 'Tablero'], ['stick', '←→ girar · ↑ saltar']]
+          : [['X', lib ? 'Piso del mapa' : 'Entra una persona'], ['Y', 'Ayuda'], ['stick', 'Caminar']];
         items.forEach(([g, t], k) => {
           const y = 70 + k * 120;
           dibujarGlifo(ctx, g, 60, y, 64);
           ctx.fillStyle = '#f1f5f9'; ctx.font = `700 44px ${FUENTE}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-          ctx.fillText(t, 110, y + 2);
+          ctx.fillText(t, 110, y + 2, w - 130);
         });
       },
     });
@@ -588,7 +729,9 @@ export class ControlVR {
     if (this.pendienteColocar && this.cuadrosSesion > 2 && this.camara.position.lengthSq() > 0) {
       const p = this.pendienteColocar;
       this.pendienteColocar = null;
-      if (p.ar) this.#colocarFrenteAR(); else this.colocar(p);
+      if (p.ar) this.#colocarFrenteAR();
+      else if (p.sentarEn) this.sentar(p.sentarEn);
+      else this.colocar(p);
     }
     if (this.modo === 'ar' && this.hitTest && frame) {
       const res = frame.getHitTestResults(this.hitTest);
@@ -653,30 +796,34 @@ export class ControlVR {
       else if (suelo.libre(cab.x, cab.z + dz)) this.rig.position.z += dz;
       const yS = suelo.y(cab.x, cab.z);
       this.rig.position.y += (yS - this.rig.position.y) * Math.min(1, dt * 8);
-      if (this.enBiblioteca) {
-        if (yS > 3.4) this.nivel = 2; else if (yS < 1.1) this.nivel = 1;
-        const est = this.app.estudiante;
-        est.pos = { x: cab.x, z: cab.z, piso: this.nivel };
-      }
+      if (this.enBiblioteca) { if (yS > 3.4) this.nivel = 2; else if (yS < 1.1) this.nivel = 1; }
+    }
+    if (this.enBiblioteca) {
+      const cab = this.posicionCabeza(this.tmpV);
+      this.ultimaPos = { x: cab.x, z: cab.z, piso: this.nivel, rumbo: this.rumboCabeza() };
+      if (this.nivel !== this.nivelMapa) { this.nivelMapa = this.nivel; this.pisoMapa = this.nivel; this.refrescar(); }
     }
     if (this.agarre) this.#moverAgarre();
-    this.#rayos();
+    this.#rayos(dt);
     this.tPaneles -= dt;
     if (this.tPaneles <= 0) {
       this.tPaneles = 0.3;
       this.#actualizarPaneles();
       this.panelMuneca.marcar();
       if (this.panelCamara.malla.visible) this.panelCamara.marcar();
-      this.panelRecorrido.malla.visible = !!this.app.recorrido?.abierto && this.app.modo === 'tecnico';
+      this.panelRecorrido.malla.visible = !!this.app.recorrido?.abierto && this.app.modo === 'ingenieria';
       if (this.panelRecorrido.malla.visible) this.panelRecorrido.marcar();
       for (const c of this.controles) c.pistas?.marcar();
     }
-    for (const p of [...this.paneles, this.panelMuneca]) if (p.malla.visible) p.update();
+    for (const p of [...this.paneles, this.panelMuneca, this.panelBanner, this.panelInfo]) if (p.malla.visible) p.update();
     for (const c of this.controles) c.pistas?.update();
   }
 
-  #rayos() {
+  #rayos(dt) {
     const visibles = this.paneles.filter((p) => p.malla.visible).map((p) => p.malla);
+    this.tMundo -= dt;
+    const tocaMundo = this.tMundo <= 0;
+    if (tocaMundo) this.tMundo = 0.1;
     for (const c of this.controles) {
       if (!c.fuente) continue;
       this.tmpM.identity().extractRotation(c.controller.matrixWorld);
@@ -688,6 +835,7 @@ export class ControlVR {
         const panel = hit.object.userData.panel;
         const b = panel.botonEn(hit.uv);
         c.hover = b ? { panel, boton: b.id } : null;
+        c.mundo = null;
         const d = hit.distance / this.escalaRig;
         c.rayo.scale.z = d;
         c.cursor.visible = true;
@@ -695,19 +843,46 @@ export class ControlVR {
         if (b && (!anterior || anterior.boton !== b.id)) this.#vibrar(0.15, 15, c.lado);
       } else {
         c.hover = null;
-        c.rayo.scale.z = 1.5;
-        c.cursor.visible = false;
+        // el rayo del control derecho también apunta al mundo (asientos, mesas, sensores…)
+        if (c.lado === 'right' && tocaMundo && !this.apuntando) {
+          this.rayMundo.ray.copy(this.raycaster.ray);
+          c.mundo = this.#elegirMundo(this.rayMundo);
+          c.distMundo = c.mundo ? this.rayMundo.ray.origin.distanceTo(this.#puntoMundo(c.mundo)) : 0;
+        } else if (c.lado !== 'right') c.mundo = null;
+        if (c.mundo && c.distMundo > 0) {
+          const d = c.distMundo / this.escalaRig;
+          c.rayo.scale.z = d; c.cursor.visible = true; c.cursor.position.set(0, 0, -d);
+        } else { c.rayo.scale.z = 1.5; c.cursor.visible = false; }
       }
     }
     for (const p of this.paneles) {
       const enEste = this.controles.find((c) => c.hover?.panel === p);
       p.fijarHover(enEste?.hover?.boton || null);
     }
+    // ficha sobre el control derecho con lo que apunta el rayo
+    const der = this.controles.find((c) => c.lado === 'right');
+    const info = der?.mundo ? this.app.modoActual?.describir?.(der.mundo) : null;
+    const clave = info ? `${info.titulo}|${info.detalle}|${info.accion}` : '';
+    if (clave !== this.claveInfo) {
+      this.claveInfo = clave;
+      this.infoActual = info;
+      this.panelInfo.malla.visible = !!info;
+      this.panelInfo.marcar();
+      if (info && der) this.#vibrar(0.12, 12, 'right');
+    }
+  }
+
+  // punto aproximado del objeto apuntado (para el largo del rayo)
+  #puntoMundo(h) {
+    if (h.ag) return this.tmpV2.set(h.ag.x, h.ag.y + 1.1, h.ag.z);
+    if (h.tipo === 'asiento') { const a = this.app.biblio.get(h.id); if (a) return this.tmpV2.set(a.x, yPiso(a.piso) + 0.5, a.z); }
+    const o = this.rayMundo.ray.origin;
+    const dist = h.distancia ?? 2;
+    return this.tmpV2.copy(this.rayMundo.ray.direction).multiplyScalar(dist).add(o);
   }
 
   #teletransportar(destino) {
     this.colocar({ x: destino.x, y: destino.y, z: destino.z, rumbo: this.rig.rotation.y, escala: this.escalaRig });
-    if (this.enBiblioteca) this.app.estudiante.pos = { x: destino.x, z: destino.z, piso: this.nivel };
     this.destinoTeleport = null;
     this.#vibrar(0.6, 70, 'right');
   }
@@ -715,12 +890,13 @@ export class ControlVR {
   #recentrar() {
     if (this.escala === 'humana') return;
     const p = this.#posicionInicial();
-    if (p && !p.ar) this.colocar(p);
+    if (p && p.sentarEn) this.sentar(p.sentarEn);
+    else if (p && !p.ar) this.colocar(p);
   }
 
   #botonA() {
     if (this.app.escenaActual === 'maqueta') this.alternarEscala();
-    else this.app.estudiante.accionPrincipal();
+    else this.app.modoActual?.accionA?.();
     this.refrescar();
   }
 
@@ -728,8 +904,10 @@ export class ControlVR {
     if (this.app.escenaActual === 'maqueta') {
       if (this.app.fuentes.modo === 'sim') { this.app.accion('entra'); this.#vibrar(0.3, 40, 'left'); }
     } else {
-      const est = this.app.estudiante;
-      if (est.entro) { est.elegirPiso(est.piso === 2 ? 1 : 2); if (!['mapa', 'asiento'].includes(est.paso) && est.paso === 'pisos') est.irA('mapa'); }
+      this.pisoMapa = this.pisoMapa === 1 ? 2 : 1;
+      this.panelTablero.malla.visible = true;
+      this.panelAyuda.malla.visible = false;
+      this.inicioPendiente = false;
     }
     this.refrescar();
   }

@@ -80,8 +80,126 @@ export class Biblioteca3D {
     this.#vestibulo();
     this.#senales();
     this.#luminarias();
+    this.#enchufes();
     this.#separarMateriales();
     this.#ruta();
+    this.#caminantes();
+    this.#flotantes();
+  }
+
+  // ---------------------------------------------------------------- textos que flotan y se desvanecen (+1 en la puerta…)
+  #flotantes() {
+    this.poolFlot = [];
+    for (let i = 0; i < 16; i++) {
+      const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+      const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false, sizeAttenuation: false }));
+      sp.visible = false; sp.renderOrder = 12;
+      sp.userData = { c, tex, vida: 0, vidaMax: 1, y0: 0 };
+      this.grupo.add(sp); this.poolFlot.push(sp);
+    }
+  }
+
+  flotante(texto, x, y, z, color = '#4ade80', { escala = 1, vida = 1.8 } = {}) {
+    const sp = this.poolFlot.find((s) => !s.visible) || this.poolFlot.reduce((a, b) => (a.userData.vida < b.userData.vida ? a : b));
+    const { c, tex } = sp.userData;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.font = '800 72px "Segoe UI", Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round'; ctx.lineWidth = 12; ctx.strokeStyle = 'rgba(6,10,20,0.88)'; ctx.strokeText(texto, 256, 66, 490);
+    ctx.fillStyle = color; ctx.fillText(texto, 256, 66, 490);
+    tex.needsUpdate = true;
+    const k = 0.075 * escala;          // fracción de la altura de la pantalla (no se achica con la distancia)
+    sp.scale.set(k * 4, k, 1);
+    sp.position.set(x, y, z);
+    Object.assign(sp.userData, { vida, vidaMax: vida, y0: y });
+    sp.material.opacity = 1;
+    sp.visible = true;
+  }
+
+  // ---------------------------------------------------------------- tomacorrientes sobre las mesas que los tienen
+  #enchufes() {
+    for (const piso of [1, 2]) {
+      const mesas = PLANO.mesas.filter((m) => m.piso === piso && m.asientos[0].enchufe);
+      const geo = mergeGeometries([geoCaja(0.34, 0.035, 0.09, 0, PLANO.mesa.alto + 0.0175, 0), geoCaja(0.05, 0.012, 0.03, -0.09, PLANO.mesa.alto + 0.04, 0), geoCaja(0.05, 0.012, 0.03, 0.09, PLANO.mesa.alto + 0.04, 0)]);
+      const inst = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.4, emissive: 0xf59e0b, emissiveIntensity: 0.12 }), mesas.length);
+      const m4 = new THREE.Matrix4();
+      mesas.forEach((m, i) => { m4.makeTranslation(m.x, yPiso(piso), m.z); inst.setMatrixAt(i, m4); });
+      this.pisos[piso].add(inst);
+    }
+  }
+
+  // ---------------------------------------------------------------- estudiantes que caminan (por instancias)
+  #caminantes() {
+    const MAX = 120;
+    this.maxCaminantes = MAX;
+    const torso = new THREE.CapsuleGeometry(0.18, 0.42, 3, 10); torso.scale(1, 1, 0.72); torso.translate(0, 1.16, 0);
+    const cabeza = new THREE.SphereGeometry(0.11, 12, 10); cabeza.translate(0, 1.6, 0.01);
+    const brazos = mergeGeometries([geoCaja(0.08, 0.55, 0.09, -0.24, 1.12, 0), geoCaja(0.08, 0.55, 0.09, 0.24, 1.12, 0)]);
+    const mochila = geoCaja(0.28, 0.36, 0.13, 0, 1.2, -0.17);
+    const cuerpo = mergeGeometries([torso, cabeza, brazos, mochila].map((g) => (g.index ? g.toNonIndexed() : g)));
+    this.instCuerpos = new THREE.InstancedMesh(cuerpo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75 }), MAX);
+    const pierna = geoCaja(0.13, 0.86, 0.15, 0, -0.43, 0);
+    this.instPiernas = new THREE.InstancedMesh(pierna, new THREE.MeshStandardMaterial({ color: 0x26324d, roughness: 0.8 }), MAX * 2);
+    this.instSombras = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.8, 0.8).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: this.texturaSombra, transparent: true, depthWrite: false, opacity: 0.5 }), MAX);
+    for (const im of [this.instCuerpos, this.instPiernas, this.instSombras]) { im.count = 0; im.frustumCulled = false; this.grupo.add(im); }
+    this.instCuerpos.castShadow = true;
+    this.colRopa = [0x1e3a8a, 0x7f1d1d, 0x14532d, 0x334155, 0xa16207, 0x6b21a8, 0x0e7490, 0xe5e7eb, 0x111827, 0x9a3412].map((c) => new THREE.Color(c));
+    // marca del rival: flecha roja que flota sobre quien va a tu asiento
+    this.marcaRival = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.32, 16).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xef4444, toneMapped: false }));
+    this.marcaRival.visible = false;
+    this.grupo.add(this.marcaRival);
+    this._m = new THREE.Matrix4(); this._m2 = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._e = new THREE.Euler();
+  }
+
+  // Dibuja a los que caminan o esperan: cuerpo con balanceo y piernas que se mueven
+  actualizarCaminantes(agentes, t, { rival = null } = {}) {
+    const m = this._m, m2 = this._m2, q = this._q, p = this._p, s = this._s, e = this._e;
+    let n = 0;
+    const dibujados = (this.dibujados ||= []);
+    dibujados.length = 0;
+    for (const ag of agentes) {
+      if (!ag.visible || ag.retraso > 0) continue;
+      if (!this.pisos[ag.piso === 2 ? 2 : 1].visible) continue;     // piso oculto (vista desde arriba)
+      if (n >= this.maxCaminantes) break;
+      dibujados.push(ag);
+      // en la casa de muñecas el piso 2 se eleva: quien va por la escalera sube en proporción
+      const y = ag.y + this.explosion * Math.min(1, Math.max(0, ag.y / PLANO.alturaPiso));
+      const paso = ag.caminando ? Math.sin(ag.fase) : 0;
+      const balanceo = ag.caminando ? Math.abs(Math.cos(ag.fase)) * 0.035 : 0;
+      q.setFromEuler(e.set(0, ag.rumbo, ag.caminando ? paso * 0.04 : 0));
+      m.compose(p.set(ag.x, y + balanceo, ag.z), q, s.set(1, 1, 1));
+      this.instCuerpos.setMatrixAt(n, m);
+      this.instCuerpos.setColorAt(n, this.colRopa[ag.color % this.colRopa.length]);
+      for (let k = 0; k < 2; k++) {
+        const lado = k ? 1 : -1;
+        const ang = paso * 0.55 * lado;
+        m2.makeRotationX(ang);
+        m2.setPosition(lado * 0.1, 0.88 + balanceo, 0);
+        q.setFromEuler(e.set(0, ag.rumbo, 0));
+        m.compose(p.set(ag.x, y, ag.z), q, s.set(1, 1, 1)).multiply(m2);
+        this.instPiernas.setMatrixAt(n * 2 + k, m);
+      }
+      m.makeTranslation(ag.x, y + 0.012, ag.z);
+      this.instSombras.setMatrixAt(n, m);
+      n++;
+    }
+    this.instCuerpos.count = n; this.instSombras.count = n; this.instPiernas.count = n * 2;
+    this.instCuerpos.instanceMatrix.needsUpdate = true; this.instPiernas.instanceMatrix.needsUpdate = true; this.instSombras.instanceMatrix.needsUpdate = true;
+    if (this.instCuerpos.instanceColor) this.instCuerpos.instanceColor.needsUpdate = true;
+    if (rival && rival.visible) {
+      this.marcaRival.visible = true;
+      this.marcaRival.position.set(rival.x, rival.y + this.explosion * Math.min(1, Math.max(0, rival.y / PLANO.alturaPiso)) + 2.1 + Math.sin(t / 180) * 0.08, rival.z);
+    } else this.marcaRival.visible = false;
+  }
+
+  // Estudiante que camina bajo un rayo (para inspeccionarlo)
+  caminanteEn(raycaster, agentes) {
+    if (!this.instCuerpos.count) return null;
+    const hit = raycaster.intersectObject(this.instCuerpos, false)[0];
+    if (!hit) return null;
+    const ag = this.dibujados?.[hit.instanceId];
+    return ag && agentes.includes(ag) ? ag : null;
   }
 
   // Cada piso con sus propios materiales: así se puede atenuar uno sin tocar el otro
@@ -361,6 +479,7 @@ export class Biblioteca3D {
       tablero.castShadow = true; tablero.receiveShadow = true; patas.castShadow = true;
       sombras.renderOrder = 1;
       this.pisos[piso].add(tablero, patas, sombras);
+      this[`mesas${piso}`] = { tablero, mesas };
       // sillas, cojines (color del estado), halos, personas, mochilas y laptops
       const sillas = new THREE.InstancedMesh(geoSilla(), this.mat.silla, asientos.length);
       const cojines = new THREE.InstancedMesh(geoCojin(), this.mat.cojin.clone(), asientos.length);
@@ -714,6 +833,29 @@ export class Biblioteca3D {
     return this[`inst${piso}`].asientos[hit.instanceId]?.id || null;
   }
 
+  // Lo que hay bajo un rayo: asiento, mesa, cámara del techo, tótem o puerta
+  objetoEn(raycaster) {
+    const objetivos = [this.totem.malla];
+    for (const piso of [1, 2]) {
+      if (!this.pisos[piso].visible) continue;
+      const I = this[`inst${piso}`];
+      objetivos.push(I.sillas, I.cojines, this[`mesas${piso}`].tablero, this[`camaras${piso}`]);
+    }
+    for (const clave of ['entrada', 'salida']) objetivos.push(this.puertasVis[clave].hojaIzq, this.puertasVis[clave].hojaDer);
+    const hit = raycaster.intersectObjects(objetivos, false)[0];
+    if (!hit) return null;
+    const o = hit.object;
+    if (o === this.totem.malla) return { tipo: 'totem', distancia: hit.distance };
+    for (const clave of ['entrada', 'salida']) if (o === this.puertasVis[clave].hojaIzq || o === this.puertasVis[clave].hojaDer) return { tipo: 'puerta', id: clave, distancia: hit.distance };
+    for (const piso of [1, 2]) {
+      const I = this[`inst${piso}`];
+      if (o === I.sillas || o === I.cojines) return { tipo: 'asiento', id: I.asientos[hit.instanceId]?.id, distancia: hit.distance };
+      if (o === this[`mesas${piso}`].tablero) return { tipo: 'mesa', id: this[`mesas${piso}`].mesas[hit.instanceId]?.id, distancia: hit.distance };
+      if (o === this[`camaras${piso}`]) return { tipo: 'camara', id: PLANO.mesas.filter((m) => m.piso === piso)[hit.instanceId]?.id, distancia: hit.distance };
+    }
+    return null;
+  }
+
   // Vista "casa de muñecas": el piso 2 se eleva y se quita el techo
   fijarExplosion(t) {
     this.explosion = t * 7.5;
@@ -730,6 +872,14 @@ export class Biblioteca3D {
 
   update(dt, t) {
     this.rutaUniforms.uTiempo.value = t / 1000;
+    for (const sp of this.poolFlot) {
+      if (!sp.visible) continue;
+      const u = sp.userData;
+      u.vida -= dt;
+      sp.position.y = u.y0 + (1 - u.vida / u.vidaMax) * 1.1;
+      sp.material.opacity = Math.min(1, u.vida * 2.2);
+      if (u.vida <= 0) sp.visible = false;
+    }
     if (this.baliza.visible) {
       this.balizaPin.position.y = 1.9 + Math.sin(t / 300) * 0.12;
       this.balizaPin.rotation.y += dt * 2;

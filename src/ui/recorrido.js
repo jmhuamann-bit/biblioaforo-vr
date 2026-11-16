@@ -24,13 +24,13 @@ export class Recorrido {
       else if (b.dataset.a === 'ant') this.ir(this.i - 1);
       else if (b.dataset.a === 'sig') this.ir(this.i + 1);
       else if (b.dataset.a === 'demo') this.demo();
-      else if (b.dataset.a === 'bib') { this.cerrar(); this.app.irModo('estudiante'); }
+      else if (b.dataset.a === 'bib') { this.cerrar(); this.app.irModo('libre', { ir: 'piloto' }); }
       else if (b.dataset.a === 'cerrar') this.cerrar();
     });
   }
 
   abrir() {
-    if (this.app.modo !== 'tecnico') this.app.irModo('tecnico');
+    if (this.app.modo !== 'ingenieria') this.app.irModo('ingenieria');
     this.abierto = true;
     this.el.hidden = false;
     this.ir(this.i);

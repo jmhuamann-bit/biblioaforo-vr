@@ -102,7 +102,7 @@ export function panelAdmin(app) {
   return { ancho: true, pestanas: { admin: pagina } };
 }
 
-function grafico(svg, b) {
+export function grafico(svg, b) {
   const W = 640, H = 260, ml = 44, mr = 14, mt = 14, mb = 30;
   const x = (min) => ml + ((min / 60 - 8) / 14) * (W - ml - mr);
   const y = (v) => mt + (1 - v / 400) * (H - mt - mb);
@@ -122,7 +122,7 @@ function grafico(svg, b) {
   svg.innerHTML = g;
 }
 
-function dispositivos(ul, caja, app) {
+export function dispositivos(ul, caja, app) {
   const est = app.estado;
   const real = app.fuentes.enVivo;
   const hace = (t) => (t ? `última línea a las ${hora(t)}` : 'sin líneas todavía');
@@ -147,7 +147,7 @@ function dispositivos(ul, caja, app) {
   if (caja.innerHTML !== txt) caja.innerHTML = txt;
 }
 
-function descargarTodo(app) {
+export function descargarTodo(app) {
   const b = app.biblio;
   const sello = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
   const csv = ['hora_simulada,personas_dentro,asientos_ocupados,libres_piso1,libres_piso2']

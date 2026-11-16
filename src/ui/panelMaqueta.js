@@ -188,11 +188,7 @@ export function panelMaqueta(app) {
       const e = esc();
       r.querySelector('[data-a="recorrido"]').addEventListener('click', () => app.abrirRecorrido());
       r.querySelector('[data-a="verPiloto"]').addEventListener('click', () => {
-        app.irModo('estudiante');
-        const est = app.estudiante;
-        if (!est.entro) { est.entro = true; est.pos = { x: 0.5, z: 9.4, piso: 1 }; est.biblio.entrar(1, { estudiante: true }); }
-        est.piso = 1; est.verMapa3D = false; est.irA('mapa');
-        est.mapa.acercarA(-10, 2.75, 16);
+        app.irModo('libre', { ir: 'piloto' });
       });
       r.querySelectorAll('[data-vista]').forEach((b) => b.addEventListener('click', () => app.vistaMaqueta(b.dataset.vista)));
       r.querySelector('[data-a="caminar"]').addEventListener('click', () => app.alternarCaminar());

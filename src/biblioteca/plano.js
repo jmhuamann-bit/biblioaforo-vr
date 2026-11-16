@@ -345,9 +345,14 @@ export function ruta(desde, hasta, { asiento = null } = {}) {
     const subir = hasta.piso > desde.piso;
     const pA = subir ? PLANO.escalera.portal1 : PLANO.escalera.portal2;
     const pB = subir ? PLANO.escalera.portal2 : PLANO.escalera.portal1;
-    pts = conY(aEstrella(desde.piso, desde.x, desde.z, pA.x, pA.z), desde.piso);
-    pts.pop();
-    pts.push(...tramoEscalera(subir));
+    if (Math.hypot(desde.x - pA.x, desde.z - pA.z) < 1.2) {
+      // ya está al pie de la escalera: sin volver atrás al portal
+      pts = [{ x: desde.x, y: yPiso(desde.piso), z: desde.z }, ...tramoEscalera(subir).slice(1)];
+    } else {
+      pts = conY(aEstrella(desde.piso, desde.x, desde.z, pA.x, pA.z), desde.piso);
+      pts.pop();
+      pts.push(...tramoEscalera(subir));
+    }
     const resto = conY(aEstrella(hasta.piso, pB.x, pB.z, destino.x, destino.z), hasta.piso);
     pts.push(...resto.slice(1));
   }
@@ -399,3 +404,126 @@ export const PUNTOS = {
   salidaExterior: { x: 5.5, z: 17.5, piso: 1 },
   llegadaPiso2: { x: PLANO.escalera.portal2.x, z: PLANO.escalera.portal2.z, piso: 2 },
 };
+
+// ---------------------------------------------------------------------
+// Rutas rápidas para muchos estudiantes a la vez: campos de distancia (Dijkstra) con "padres"
+// desde la entrada, la salida y los dos extremos de la escalera. Cada ruta sale en ~1 ms.
+// ---------------------------------------------------------------------
+class CampoRuta {
+  constructor(piso, x, z) {
+    const g = grilla(piso);
+    this.g = g; this.piso = piso; this.origen = { x, z };
+    const [si, sj] = g.cercanaLibre(...g.celda(x, z));
+    const N = NX * NZ;
+    this.dist = new Float32Array(N).fill(Infinity);
+    this.padre = new Int32Array(N).fill(-1);
+    const h = new Monticulo();
+    const ini = sj * NX + si;
+    this.dist[ini] = 0; h.push(ini, 0);
+    while (h.size) {
+      const c = h.pop();
+      const d0 = this.dist[c];
+      const ci = c % NX, cj = (c / NX) | 0;
+      for (const [di, dj, w] of VEC) {
+        const ni = ci + di, nj = cj + dj;
+        if (ni < 0 || nj < 0 || ni >= NX || nj >= NZ) continue;
+        const n = nj * NX + ni;
+        if (g.b[n]) continue;
+        if (di && dj && (g.b[cj * NX + ni] || g.b[nj * NX + ci])) continue;
+        const nd = d0 + w * CELDA * (g.holgura[n] < 3 ? 1.25 : 1);
+        if (nd < this.dist[n]) { this.dist[n] = nd; this.padre[n] = c; h.push(n, nd); }
+      }
+    }
+  }
+  // camino desde (x, z) hasta el origen del campo
+  camino(x, z) {
+    const g = this.g;
+    const [i, j] = g.cercanaLibre(...g.celda(x, z));
+    let c = j * NX + i;
+    if (!Number.isFinite(this.dist[c])) return [{ x, z }, { ...this.origen }];
+    const pts = [];
+    let guardia = 0;
+    while (c !== -1 && guardia++ < NX * NZ) { pts.push(g.centro(c)); c = this.padre[c]; }
+    pts[0] = { x, z };
+    pts.push({ ...this.origen });
+    return suavizar(pts, g);
+  }
+}
+
+const ORIGENES_CAMPO = {
+  entrada: [1, 0.5, 12.55],
+  salida: [1, 5.5, 12.55],
+  escalera1: [1, PLANO.escalera.portal1.x, PLANO.escalera.portal1.z],
+  escalera2: [2, PLANO.escalera.portal2.x, PLANO.escalera.portal2.z],
+};
+const camposRuta = {};
+export function campoRuta(nombre) {
+  if (!camposRuta[nombre]) { const [p, x, z] = ORIGENES_CAMPO[nombre]; camposRuta[nombre] = new CampoRuta(p, x, z); }
+  return camposRuta[nombre];
+}
+const conAltura = (lista, piso) => lista.map((p) => ({ x: p.x, y: yPiso(piso), z: p.z }));
+
+// De la puerta de entrada (por fuera) a un asiento o a un punto {x, z, piso}
+export function rutaLlegada(destino, asiento = null) {
+  const acc = asiento ? accesoAsiento(asiento) : destino;
+  const piso = asiento ? asiento.piso : destino.piso;
+  const xP = (PLANO.puertas.entrada.x0 + PLANO.puertas.entrada.x1) / 2;
+  let pts = [{ x: xP, y: 0, z: PLANO.z1 + 1.2 }];
+  if (piso === 1) {
+    pts.push(...conAltura(campoRuta('entrada').camino(acc.x, acc.z).reverse(), 1));
+  } else {
+    const E = PLANO.escalera;
+    pts.push(...conAltura(campoRuta('entrada').camino(E.portal1.x, E.portal1.z).reverse(), 1));
+    pts.pop();
+    pts.push(...tramoEscalera(true));
+    pts.push(...conAltura(campoRuta('escalera2').camino(acc.x, acc.z).reverse(), 2).slice(1));
+  }
+  if (asiento) pts.push({ x: asiento.x, y: yPiso(piso), z: asiento.z });
+  return limpiar(pts);
+}
+
+// De cualquier punto {x, z, piso} a la plaza, saliendo por la puerta de salida
+export function rutaSalida(desde) {
+  const xS = (PLANO.puertas.salida.x0 + PLANO.puertas.salida.x1) / 2;
+  let pts = [];
+  if (desde.piso === 2) {
+    const E = PLANO.escalera;
+    pts.push(...conAltura(campoRuta('escalera2').camino(desde.x, desde.z), 2));
+    pts.pop();
+    pts.push(...tramoEscalera(false));
+    pts.push(...conAltura(campoRuta('salida').camino(E.portal1.x, E.portal1.z), 1).slice(1));
+  } else {
+    pts.push(...conAltura(campoRuta('salida').camino(desde.x, desde.z), 1));
+  }
+  pts.push({ x: xS, y: 0, z: PLANO.z1 + 1.2 }, { x: xS + (Math.random() - 0.5) * 6, y: 0, z: PLANO.z1 + 12 + Math.random() * 6 });
+  return limpiar(pts);
+}
+
+// Entre dos puntos interiores del mismo o distinto piso (para reubicar a alguien)
+export function rutaInterior(desde, hasta, asiento = null) {
+  return ruta(desde, hasta, { asiento }).pts;
+}
+
+function limpiar(pts) {
+  return pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y, p.z - pts[i - 1].z) > 0.05);
+}
+
+// Lugares para esperar de pie (vestíbulo) y para mirar libros (frente a los estantes)
+export const ESPERA = [[-6, 8.6], [-2, 7.7], [3.5, 8.2], [8, 7.9], [12.5, 8.4], [-9.5, 11.6], [17.5, 11.4], [-13, 8.2]]
+  .map(([x, z]) => ({ x, z, piso: 1 }));
+export const ESTANTES_FRENTE = [
+  ...[-10, -7, -4, -1, 2].map((z) => ({ x: -21.1, z, piso: 1 })),
+  ...[-3, 2, 7, 12, 16].map((x) => ({ x, z: -11.75, piso: 1 })),
+  ...[-10, -6, -2, 2].map((z) => ({ x: -21.1, z, piso: 2 })),
+];
+// Fila afuera de la entrada cuando el aforo está completo
+export function puestoCola(k) {
+  return { x: 0.5 + (k % 2 ? 0.35 : -0.35), y: 0, z: PLANO.z1 + 1.6 + k * 0.72 };
+}
+
+// ¿Está (x, z) sobre la escalera, entre dos pisos? (ahí las rutas no se recalculan)
+export function enEscalera(x, z, nivel = 1) {
+  const E = PLANO.escalera;
+  const y = alturaSuelo(x, z, nivel);
+  return x > E.x0 && x < E.x1 && z > E.z0 && z < E.z1 && y > 0.15 && y < PLANO.alturaPiso - 0.15;
+}

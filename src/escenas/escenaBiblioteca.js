@@ -1,4 +1,4 @@
-// Escena 2: la biblioteca de dos pisos (experiencia del estudiante y administración).
+// Escena 2: la biblioteca de dos pisos, viva (la usan Hora punta, Caos, Detective, Libre y el menú).
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Biblioteca3D, dibujarTotem } from './biblioteca3d.js';
@@ -101,7 +101,9 @@ export class EscenaBiblioteca {
 
   // ---------------------------------------------------------------- ciclo
   update(dt, t) {
-    this.app.simBiblio?.update(dt);
+    // el reloj del día y la multitud (los estudiantes son los que mueven puertas y asientos)
+    this.app.simBiblio.avanzarReloj(dt);
+    this.app.multitud.update(dt);
     this.explosionActual += (this.explosionObjetivo - this.explosionActual) * Math.min(1, dt * 3);
     if (Math.abs(this.explosionActual - this.explosionObjetivo) < 0.002) this.explosionActual = this.explosionObjetivo;
     this.b3d.fijarExplosion(this.explosionActual);
@@ -117,7 +119,7 @@ export class EscenaBiblioteca {
       this.b3d.totem.dibujar((ctx, w, h) => dibujarTotem(ctx, w, h, { estado: this.estado, fuente: this.app.fuentes.modo, hora: this.estado.hora() }));
     }
     this.b3d.update(dt, t);
-    this.app.estudiante?.update(dt, t);
+    this.b3d.actualizarCaminantes(this.app.multitud.agentes, t, { rival: this.app.multitud.rival });
   }
 
   marcar({ tuyo = this.tuyo, elegido = this.elegido } = {}) {

@@ -110,8 +110,27 @@ export class DirectorMaqueta {
     return true;
   }
 
+  // Clic sobre una silla (simulación): si está libre, alguien entra por S1 y se sienta ahí; si hay
+  // alguien, se levanta y sale por S2; si hay una mochila, se retira.
+  alternarSilla(idx) {
+    if (this.modo !== 'sim') return null;
+    if (this.mochilas.has(idx)) { this.#quitarMochila(idx); return 'mochila'; }
+    const ocupante = this.reservas.get(idx);
+    if (ocupante) { if (!ocupante.plan?.saliendo) this.#salir(ocupante); return 'sale'; }
+    const silla = this.maq.sillas[idx];
+    const ag = this.#llegaPersona({ visitaCorta: false, silla });
+    this.reservas.set(idx, ag);
+    return 'entra';
+  }
+
+  #irYQuedarse(ag, silla) {
+    if (this.modo !== 'sim') return;
+    this.#irASentarse(ag, silla);
+    this.sil.esperar(ag, entre(40, 70) / this.ritmo, () => this.#salir(ag));
+  }
+
   // ------------------------------------------------------------ simulación
-  #llegaPersona({ visitaCorta = Math.random() < 0.12, velocidadCruce = null, desfase = 0, variante = null } = {}) {
+  #llegaPersona({ visitaCorta = Math.random() < 0.12, velocidadCruce = null, desfase = 0, variante = null, silla = null } = {}) {
     const G = this.G;
     const ag = this.sil.crear({ x: this.xE + entre(-0.004, 0.004), z: G.zF - 0.024 + desfase, rumbo: Math.PI, variante, bajando: true });
     ag.plan = { visitaCorta, saliendo: false };
@@ -119,7 +138,7 @@ export class DirectorMaqueta {
     // en pareja ambos caminan a la misma velocidad para cruzar pegados
     this.sil.caminar(ag, [{ x: this.xE, z: G.zPared + 0.034 + desfase }], { velocidad: velocidadCruce });
     this.sil.caminar(ag, [{ x: this.xE, z: G.zPared - 0.024 + desfase * 0.3 }], { velocidad: vCruce });
-    this.sil.hacer(ag, () => this.#decidir(ag));
+    this.sil.hacer(ag, () => (silla ? this.#irYQuedarse(ag, silla) : this.#decidir(ag)));
     return ag;
   }
 

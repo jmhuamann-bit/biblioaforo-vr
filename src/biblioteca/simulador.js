@@ -30,6 +30,7 @@ function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v 
 
 export const ESCENARIOS = {
   tranquila: { nombre: 'Mañana tranquila', hora: 9 + 40 / 60, factor: 1, objetos: 0.02 },
+  horaPunta: { nombre: 'Llega la hora punta', hora: 13 + 55 / 60, factor: 1, objetos: 0.035 },
   punta14: { nombre: 'Hora punta 14:00', hora: 14 + 20 / 60, factor: 1, objetos: 0.03 },
   punta17: { nombre: 'Hora punta 17:30', hora: 17 + 40 / 60, factor: 1, objetos: 0.03 },
   examenes: { nombre: 'Semana de exámenes', hora: 15, factor: 1.1, objetos: 0.04 },
@@ -153,7 +154,20 @@ export class SimuladorBiblioteca {
   }
   llegadaMasiva() { this.entran(60); }
 
-  // ------------------------------------------------------------ ciclo
+  // Solo el reloj del día y el historial (la multitud de estudiantes mueve los asientos)
+  avanzarReloj(dtReal) {
+    if (this.pausa) return;
+    const e = this.e;
+    e.minuto += (dtReal * this.velocidad) / 60;
+    if (e.minuto >= 22 * 60) { e.minuto = 22 * 60; this.pausa = true; e.log('escenario', 'La biblioteca cerró (22:00)'); }
+    this.tMuestra += (dtReal * this.velocidad) / 60;
+    if (this.tMuestra >= 1) { this.tMuestra = 0; e.muestra(); }
+  }
+
+  // Ajusta la hora del día sin rehacer la ocupación
+  fijarHora(min) { this.e.minuto = min; this.e.muestra(); }
+
+  // ------------------------------------------------------------ ciclo estadístico (sin figuras)
   update(dtReal) {
     if (this.pausa) return;
     const e = this.e;
