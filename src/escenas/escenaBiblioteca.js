@@ -110,7 +110,7 @@ export class EscenaBiblioteca {
     if (this.estado.version !== this.versionDibujada || this.cambioMarcas) {
       this.versionDibujada = this.estado.version;
       this.cambioMarcas = false;
-      this.b3d.actualizarAsientos(this.estado, { tuyo: this.tuyo, elegido: this.elegido });
+      this.b3d.actualizarAsientos(this.estado, { tuyo: this.tuyo, elegido: this.elegido, verdad: this.app.multitud.verdad });
     }
     this.b3d.fijarPiloto(this.estado.pilotoReal);
     this.tTotem -= dt;
@@ -119,7 +119,7 @@ export class EscenaBiblioteca {
       this.b3d.totem.dibujar((ctx, w, h) => dibujarTotem(ctx, w, h, { estado: this.estado, fuente: this.app.fuentes.modo, hora: this.estado.hora() }));
     }
     this.b3d.update(dt, t);
-    this.b3d.actualizarCaminantes(this.app.multitud.agentes, t, { rival: this.app.multitud.rival });
+    this.b3d.actualizarGente({ multitud: this.app.multitud, estado: this.estado, camara: this.motor.camara, renderer: this.motor.renderer, t, dt, calidad: this.motor.calidad });
   }
 
   marcar({ tuyo = this.tuyo, elegido = this.elegido } = {}) {

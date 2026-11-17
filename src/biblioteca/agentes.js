@@ -12,6 +12,7 @@ const poisson = (l) => { if (l <= 0) return 0; if (l > 30) return Math.max(0, Ma
 function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
 
 let siguienteId = 1;
+const nuevaSemilla = () => Math.floor(Math.random() * 2147483647);   // aspecto de la persona (solo visual)
 
 export class Multitud extends Emisor {
   constructor({ estado, sim }) {
@@ -46,7 +47,7 @@ export class Multitud extends Emisor {
     for (const a of this.estado.asientos) {
       this.verdad.set(a.id, { ocupado: a.ocupado, objeto: a.objeto });
       if (a.ocupado && !a.estudiante && !(a.piloto && this.estado.pilotoReal)) {
-        this.ocupantes.set(a.id, { hasta: min + (a.objeto ? azarEntre(5, 30) : -Math.log(1 - Math.random()) * this.sim.estancia * 0.8 + 0.4), objeto: a.objeto });
+        this.ocupantes.set(a.id, { hasta: min + (a.objeto ? azarEntre(5, 30) : -Math.log(1 - Math.random()) * this.sim.estancia * 0.8 + 0.4), objeto: a.objeto, semilla: nuevaSemilla() });
       }
     }
     // precálculo de las rutas (evita un tirón con la primera llegada)
@@ -108,7 +109,7 @@ export class Multitud extends Emisor {
     const ag = {
       id: siguienteId++, estado: 'afuera', visible: true, pts: null, largos: null, d: 0, total: 0,
       vel: 1.35 * azarEntre(0.85, 1.15), x: 0, y: 0, z: 0, rumbo: Math.PI, fase: Math.random() * 6, t: 0,
-      asiento: null, destino: null, color: Math.floor(Math.random() * 10), piso: 1, dentro: false, ...extra,
+      asiento: null, destino: null, color: Math.floor(Math.random() * 10), piso: 1, dentro: false, semilla: nuevaSemilla(), ...extra,
     };
     this.agentes.push(ag);
     return ag;
@@ -371,7 +372,7 @@ export class Multitud extends Emisor {
   #sentarSinAnimacion(id, contar = false) {
     if (contar) this.estado.entrar(1);
     this.#fijar(id, true);
-    this.ocupantes.set(id, { hasta: this.estado.minuto + -Math.log(1 - Math.random()) * this.sim.estancia + 5, objeto: false });
+    this.ocupantes.set(id, { hasta: this.estado.minuto + -Math.log(1 - Math.random()) * this.sim.estancia + 5, objeto: false, semilla: nuevaSemilla() });
   }
 
   // El jugador se sienta / se levanta
@@ -426,8 +427,9 @@ export class Multitud extends Emisor {
     }
     if (sentado) {
       const a = this.estado.get(sentado);
+      const semilla = this.ocupantes.get(sentado)?.semilla;
       this.ocupantes.delete(sentado);
-      const ag = this.#nuevo({ x: a.x, y: yPiso(a.piso), z: a.z, piso: a.piso, dentro: true, estado: 'levantandose', t: CONFIRMACION_S });
+      const ag = this.#nuevo({ x: a.x, y: yPiso(a.piso), z: a.z, piso: a.piso, dentro: true, estado: 'levantandose', t: CONFIRMACION_S, ...(semilla ? { semilla } : {}) });
       ag.asientoDejado = sentado;
       ag.cambiaA = s.id;
       ag.asiento = s.id; ag.destino = 'asiento';
@@ -481,7 +483,7 @@ export class Multitud extends Emisor {
   #levantar(id, o, { sinObjeto = false } = {}) {
     const a = this.estado.get(id);
     this.ocupantes.delete(id);
-    const ag = this.#nuevo({ x: a.x, y: yPiso(a.piso), z: a.z, piso: a.piso, dentro: true, estado: 'levantandose', t: CONFIRMACION_S });
+    const ag = this.#nuevo({ x: a.x, y: yPiso(a.piso), z: a.z, piso: a.piso, dentro: true, estado: 'levantandose', t: CONFIRMACION_S, ...(o.semilla ? { semilla: o.semilla } : {}) });
     ag.asientoDejado = id;
     ag.dejaObjeto = !sinObjeto && !o.objeto && Math.random() < this.sim.probObjeto;
     if (o.objeto) { ag.visible = false; this.#retirar(ag); this.#fijar(id, false); }
@@ -563,7 +565,7 @@ export class Multitud extends Emisor {
         if (this.estado.get(id).ocupado) { ag.estado = 'caminando'; this.#reubicar(ag); return; }   // alguien se sentó primero
         this.reservas.delete(id);
         this.#fijar(id, true);
-        this.ocupantes.set(id, { hasta: this.estado.minuto + -Math.log(1 - Math.random()) * this.sim.estancia + 5, objeto: false });
+        this.ocupantes.set(id, { hasta: this.estado.minuto + -Math.log(1 - Math.random()) * this.sim.estancia + 5, objeto: false, semilla: ag.semilla });
         this.emit('agente', { tipo: 'seSento', ag, asiento: id });
         if (this.rival === ag) { this.rival = null; this.emit('rivalGano', { ag, asiento: id }); }
         this.#retirar(ag);

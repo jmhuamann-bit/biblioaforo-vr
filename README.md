@@ -30,6 +30,7 @@ Colores de los asientos: verde libre, rojo ocupado, ámbar apartado con un objet
 - **Estudiantes** con estados: afuera → fila (si el aforo está completo) → entran (sensor S1) → buscan asiento o estante → se sientan (0,9 s de confirmación) → estudian → se levantan → salen (sensor S2). Si su asiento se ocupa antes de llegar, buscan otro; si no hay, esperan de pie en el vestíbulo.
 - **Estados del entorno:** normal, alta demanda (≥ 85 %), sin asientos libres, aforo completo (fila afuera), incidente (cámaras sin señal).
 - **Rutas** por una grilla de 25 cm (A* para ti, campos de distancia para la multitud) que se recalculan al moverte o cuando cambia la disponibilidad.
+- **Personas realistas**, generadas por código: cuerpos con proporciones naturales (altura, complexión y sexo variables), rostros con ojos, cejas, nariz y labios, 8 expresiones (neutral, sonrisa, concentrado, decidido, hablando, sorpresa, cansado y parpadeo), 9 peinados, ropa con tela, mezclilla, cuadros, rayas y pliegues, lentes, mochilas, celulares y libros. Un esqueleto de 11 huesos las anima: caminan con zancada y balanceo, giran, se sientan y se levantan, teclean, escriben, leen, conversan, se estiran y miran a quien se acerca. Tres niveles de detalle mantienen el visor fluido.
 - **Sonido** sintetizado: pitido del sensor al cruzar, cambio de asiento, alertas, misión cumplida y un murmullo que crece con la ocupación (botón 🔊).
 
 ## Teclado y ratón
@@ -72,7 +73,8 @@ src/app.js                 experiencias, rutas, ratón, sonido y diálogos
 src/juego/                 menú, Hora punta, Caos, Detective, Ingeniería, Libre, jugador, HUD, mapa, vista aérea
 src/biblioteca/            plano y rutas, estado (332 asientos), reloj del día, multitud (agentes), recomendador, mesa piloto
 src/datos/                 lectura USB (Web Serial), intérprete del Monitor Serie, modo en vivo (MQTT)
-src/escenas/               biblioteca 3D (con estudiantes animados), maqueta 3D, ESP32-CAM virtual, siluetas
+src/escenas/               biblioteca 3D, personas (gente.js), maqueta 3D, ESP32-CAM virtual, siluetas
+src/escenas/humanos/       aspecto, cuerpos y peinados, rostros y telas, esqueleto y material de las personas
 src/sim/                   firmware de los Anexos A y B emulado, director de la maqueta
 src/control/               teclado y ratón, visor (WebXR), paneles 3D
 src/motor/                 renderizado, texturas, textos, sonido

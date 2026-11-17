@@ -6,6 +6,7 @@ import { PLANO, yPiso } from '../biblioteca/plano.js';
 import * as TX from '../motor/texturas.js';
 import { etiqueta, Pantalla, FUENTE, rectRedondo } from '../motor/textos.js';
 import { COLORES } from '../config.js';
+import { Gente } from './gente.js';
 
 const H = PLANO.alturaPiso, HS = PLANO.alturaSala;
 const ANCHO = PLANO.x1 - PLANO.x0, FONDO = PLANO.z1 - PLANO.z0;
@@ -49,16 +50,6 @@ function geoSilla() {
   return mergeGeometries(partes);
 }
 function geoCojin() { return geoCaja(0.42, 0.035, 0.38, 0, 0.49, 0.01); }
-
-// Persona sentada (torso, cabeza, muslos y piernas), mirando hacia +z
-function geoPersona() {
-  const torso = new THREE.CapsuleGeometry(0.17, 0.32, 3, 8); torso.scale(1, 1, 0.7); torso.translate(0, 0.86, -0.06);
-  const cabeza = new THREE.SphereGeometry(0.105, 10, 8); cabeza.translate(0, 1.27, -0.03);
-  const muslos = geoCaja(0.34, 0.14, 0.42, 0, 0.55, 0.14);
-  const piernas = geoCaja(0.3, 0.46, 0.12, 0, 0.25, 0.33);
-  const brazos = geoCaja(0.46, 0.09, 0.32, 0, 0.88, 0.16);
-  return mergeGeometries([torso, cabeza, muslos, piernas, brazos].map((g) => g.index ? g.toNonIndexed() : g));
-}
 
 export class Biblioteca3D {
   constructor() {
@@ -129,78 +120,31 @@ export class Biblioteca3D {
     }
   }
 
-  // ---------------------------------------------------------------- estudiantes que caminan (por instancias)
+  // ---------------------------------------------------------------- personas (caminando y sentadas) y marca del rival
   #caminantes() {
-    const MAX = 120;
-    this.maxCaminantes = MAX;
-    const torso = new THREE.CapsuleGeometry(0.18, 0.42, 3, 10); torso.scale(1, 1, 0.72); torso.translate(0, 1.16, 0);
-    const cabeza = new THREE.SphereGeometry(0.11, 12, 10); cabeza.translate(0, 1.6, 0.01);
-    const brazos = mergeGeometries([geoCaja(0.08, 0.55, 0.09, -0.24, 1.12, 0), geoCaja(0.08, 0.55, 0.09, 0.24, 1.12, 0)]);
-    const mochila = geoCaja(0.28, 0.36, 0.13, 0, 1.2, -0.17);
-    const cuerpo = mergeGeometries([torso, cabeza, brazos, mochila].map((g) => (g.index ? g.toNonIndexed() : g)));
-    this.instCuerpos = new THREE.InstancedMesh(cuerpo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75 }), MAX);
-    const pierna = geoCaja(0.13, 0.86, 0.15, 0, -0.43, 0);
-    this.instPiernas = new THREE.InstancedMesh(pierna, new THREE.MeshStandardMaterial({ color: 0x26324d, roughness: 0.8 }), MAX * 2);
-    this.instSombras = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.8, 0.8).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: this.texturaSombra, transparent: true, depthWrite: false, opacity: 0.5 }), MAX);
-    for (const im of [this.instCuerpos, this.instPiernas, this.instSombras]) { im.count = 0; im.frustumCulled = false; this.grupo.add(im); }
-    this.instCuerpos.castShadow = true;
-    this.colRopa = [0x1e3a8a, 0x7f1d1d, 0x14532d, 0x334155, 0xa16207, 0x6b21a8, 0x0e7490, 0xe5e7eb, 0x111827, 0x9a3412].map((c) => new THREE.Color(c));
+    this.gente = new Gente({ texturaSombra: this.texturaSombra });
+    this.grupo.add(this.gente.grupo);
     // marca del rival: flecha roja que flota sobre quien va a tu asiento
     this.marcaRival = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.32, 16).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xef4444, toneMapped: false }));
     this.marcaRival.visible = false;
     this.grupo.add(this.marcaRival);
-    this._m = new THREE.Matrix4(); this._m2 = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._e = new THREE.Euler();
   }
 
-  // Dibuja a los que caminan o esperan: cuerpo con balanceo y piernas que se mueven
-  actualizarCaminantes(agentes, t, { rival = null } = {}) {
-    const m = this._m, m2 = this._m2, q = this._q, p = this._p, s = this._s, e = this._e;
-    let n = 0;
-    const dibujados = (this.dibujados ||= []);
-    dibujados.length = 0;
-    for (const ag of agentes) {
-      if (!ag.visible || ag.retraso > 0) continue;
-      if (!this.pisos[ag.piso === 2 ? 2 : 1].visible) continue;     // piso oculto (vista desde arriba)
-      if (n >= this.maxCaminantes) break;
-      dibujados.push(ag);
-      // en la casa de muñecas el piso 2 se eleva: quien va por la escalera sube en proporción
-      const y = ag.y + this.explosion * Math.min(1, Math.max(0, ag.y / PLANO.alturaPiso));
-      const paso = ag.caminando ? Math.sin(ag.fase) : 0;
-      const balanceo = ag.caminando ? Math.abs(Math.cos(ag.fase)) * 0.035 : 0;
-      q.setFromEuler(e.set(0, ag.rumbo, ag.caminando ? paso * 0.04 : 0));
-      m.compose(p.set(ag.x, y + balanceo, ag.z), q, s.set(1, 1, 1));
-      this.instCuerpos.setMatrixAt(n, m);
-      this.instCuerpos.setColorAt(n, this.colRopa[ag.color % this.colRopa.length]);
-      for (let k = 0; k < 2; k++) {
-        const lado = k ? 1 : -1;
-        const ang = paso * 0.55 * lado;
-        m2.makeRotationX(ang);
-        m2.setPosition(lado * 0.1, 0.88 + balanceo, 0);
-        q.setFromEuler(e.set(0, ag.rumbo, 0));
-        m.compose(p.set(ag.x, y, ag.z), q, s.set(1, 1, 1)).multiply(m2);
-        this.instPiernas.setMatrixAt(n * 2 + k, m);
-      }
-      m.makeTranslation(ag.x, y + 0.012, ag.z);
-      this.instSombras.setMatrixAt(n, m);
-      n++;
-    }
-    this.instCuerpos.count = n; this.instSombras.count = n; this.instPiernas.count = n * 2;
-    this.instCuerpos.instanceMatrix.needsUpdate = true; this.instPiernas.instanceMatrix.needsUpdate = true; this.instSombras.instanceMatrix.needsUpdate = true;
-    if (this.instCuerpos.instanceColor) this.instCuerpos.instanceColor.needsUpdate = true;
+  // Personas: quienes caminan (la multitud) y quienes están sentados (asientos ocupados)
+  actualizarGente({ multitud, estado, camara, renderer, t, dt, calidad }) {
+    this.gente.actualizar({
+      multitud, estado, explosion: this.explosion, pisoVisible: (p) => this.pisos[p].visible,
+      camara, renderer, t, dt, calidad, avatar: this.avatar,
+    });
+    const rival = multitud.rival;
     if (rival && rival.visible) {
       this.marcaRival.visible = true;
-      this.marcaRival.position.set(rival.x, rival.y + this.explosion * Math.min(1, Math.max(0, rival.y / PLANO.alturaPiso)) + 2.1 + Math.sin(t / 180) * 0.08, rival.z);
+      this.marcaRival.position.set(rival.x, rival.y + this.explosion * Math.min(1, Math.max(0, rival.y / PLANO.alturaPiso)) + 2.15 + Math.sin(t / 180) * 0.08, rival.z);
     } else this.marcaRival.visible = false;
   }
 
   // Estudiante que camina bajo un rayo (para inspeccionarlo)
-  caminanteEn(raycaster, agentes) {
-    if (!this.instCuerpos.count) return null;
-    const hit = raycaster.intersectObject(this.instCuerpos, false)[0];
-    if (!hit) return null;
-    const ag = this.dibujados?.[hit.instanceId];
-    return ag && agentes.includes(ag) ? ag : null;
-  }
+  caminanteEn(raycaster) { return this.gente.caminanteEn(raycaster); }
 
   // Cada piso con sus propios materiales: así se puede atenuar uno sin tocar el otro
   #separarMateriales() {
@@ -236,7 +180,6 @@ export class Biblioteca3D {
       metal: new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.35, metalness: 0.8 }),
       silla: new THREE.MeshStandardMaterial({ color: 0x4a5160, roughness: 0.7 }),
       cojin: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, emissive: 0xffffff, emissiveIntensity: 0.0 }),
-      persona: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }),
       verde: new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.6 }),
     };
     this.texturaSombra = TX.sombraSuave();
@@ -485,12 +428,10 @@ export class Biblioteca3D {
       const cojines = new THREE.InstancedMesh(geoCojin(), this.mat.cojin.clone(), asientos.length);
       // aro de color bajo cada silla: se lee desde lejos y desde arriba (verde libre, rojo ocupado…)
       const halos = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.15, 1.15).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: this.texturaHalo, transparent: true, depthWrite: false, toneMapped: false, opacity: 1 }), asientos.length);
-      const personas = new THREE.InstancedMesh(geoPersona(), this.mat.persona, asientos.length);
       const mochilas = new THREE.InstancedMesh(geoCaja(0.32, 0.4, 0.2, 0, 0.72, -0.02), new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.85 }), asientos.length);
       // laptop sobre la mesa, frente a la silla (la silla está a ~0.98 m del centro de la mesa)
       const laptops = new THREE.InstancedMesh(mergeGeometries([geoCaja(0.32, 0.015, 0.22, 0, M.alto + 0.008, 0.62), (() => { const g = geoCaja(0.32, 0.21, 0.012, 0, 0, 0); g.rotateX(-0.25); g.translate(0, M.alto + 0.11, 0.74); return g; })()]), new THREE.MeshStandardMaterial({ color: 0x9aa1aa, roughness: 0.35, metalness: 0.7 }), asientos.length);
       const r = TX.azar(piso * 31);
-      const ropa = [0x1e3a8a, 0x7f1d1d, 0x14532d, 0x334155, 0xa16207, 0x6b21a8, 0x0e7490, 0xe5e7eb, 0x111827, 0x9a3412];
       const q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
       asientos.forEach((a, i) => {
         const giro = a.mira > 0 ? 0 : Math.PI;
@@ -502,12 +443,11 @@ export class Biblioteca3D {
         q.setFromEuler(e.set(0, giro, 0));
         m4.compose(p.set(a.x, y0, a.z - a.mira * 0.08), q, s); laptops.setMatrixAt(i, m4);
         m4.makeTranslation(a.x, y0 + 0.012, a.z); halos.setMatrixAt(i, m4);
-        personas.setColorAt(i, new THREE.Color(ropa[Math.floor(r() * ropa.length)]));
       });
-      for (const im of [sillas, cojines, personas, mochilas, laptops]) { im.castShadow = true; im.receiveShadow = true; }
+      for (const im of [sillas, cojines, mochilas, laptops]) { im.castShadow = true; im.receiveShadow = true; }
       halos.renderOrder = 2;
-      this.pisos[piso].add(sillas, cojines, halos, personas, mochilas, laptops);
-      this[`inst${piso}`] = { asientos, sillas, cojines, halos, personas, mochilas, laptops, indice: new Map(asientos.map((a, i) => [a.id, i])) };
+      this.pisos[piso].add(sillas, cojines, halos, mochilas, laptops);
+      this[`inst${piso}`] = { asientos, sillas, cojines, halos, mochilas, laptops, indice: new Map(asientos.map((a, i) => [a.id, i])) };
     }
     // marca de la mesa piloto (aro dorado en el piso, cámara sobre la mesa y rótulo)
     const mp = PLANO.mesaPiloto;
@@ -735,7 +675,8 @@ export class Biblioteca3D {
     const mochila = new THREE.Mesh(geoCaja(0.32, 0.4, 0.16, 0, 1.0, -0.24), new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.8 }));
     const aroA = new THREE.Mesh(new THREE.RingGeometry(0.36, 0.46, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.8, toneMapped: false, depthWrite: false }));
     aroA.position.y = 0.02;
-    avatar.add(cuerpo, cabeza, mochila, aroA);
+    void cuerpo; void cabeza; void mochila;
+    avatar.add(aroA);
     avatar.visible = false;
     this.avatar = avatar;
     this.grupo.add(avatar);
@@ -788,7 +729,7 @@ export class Biblioteca3D {
 
   // ---------------------------------------------------------------- estado de los asientos
   // estado: EstadoBiblioteca · tuyo: id del asiento del estudiante · elegido: id seleccionado
-  actualizarAsientos(estado, { tuyo = null, elegido = null } = {}) {
+  actualizarAsientos(estado, { tuyo = null, elegido = null, verdad = null } = {}) {
     const m4 = new THREE.Matrix4(), cero = new THREE.Matrix4().makeScale(0, 0, 0);
     const color = new THREE.Color();
     for (const piso of [1, 2]) {
@@ -800,14 +741,14 @@ export class Biblioteca3D {
         color.copy(esTuyo ? COL.tuyo : COL[e]);
         I.cojines.setColorAt(i, color);
         I.halos.setColorAt(i, a.id === elegido ? COL.tuyo : color);
-        const conPersona = e === 'ocupado' && !esTuyo;
+        const v = e === 'sinDato' && verdad ? verdad.get(a.id) : null;
+        const conPersona = (e === 'ocupado' || (v && v.ocupado && !v.objeto)) && !esTuyo;
         I.sillas.getMatrixAt(i, m4);
-        I.personas.setMatrixAt(i, conPersona ? m4 : cero);
         I.laptops.setMatrixAt(i, conPersona && (i * 7) % 3 !== 0 ? m4 : cero);
         I.mochilas.setMatrixAt(i, e === 'objeto' ? m4 : cero);
       });
       for (const k of ['cojines', 'halos']) I[k].instanceColor.needsUpdate = true;
-      for (const k of ['personas', 'laptops', 'mochilas']) I[k].instanceMatrix.needsUpdate = true;
+      for (const k of ['laptops', 'mochilas']) I[k].instanceMatrix.needsUpdate = true;
     }
   }
 
