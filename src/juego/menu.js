@@ -79,15 +79,26 @@ export class Menu {
             <span class="jugar">Jugar ▸</span>
           </button>`).join('')}
       </div>
+      <button class="tarjeta-extra" data-modo="presentacion">
+        <span class="icono-modo" aria-hidden="true">🎤</span>
+        <span class="texto-extra">
+          <span class="etiqueta-extra">Sección extra</span>
+          <b>Simulación para presentación <kbd>6</kbd></b>
+          <small>Los dos pisos llenos: solo la mesa piloto tiene 2 sillas libres. Con el Meta Quest 3 caminas hacia el sensor S1 real; cuando te detecta, en el simulador también entras. Luego vas a la mesa y te sientas.</small>
+        </span>
+        <span class="jugar">Abrir ▸</span>
+      </button>
       <p class="menu-pie">Con un visor Meta Quest 3, pulsa <b>Entrar al visor 3D</b> en la barra de arriba. Los datos son simulados salvo la mesa piloto 1-01, que puede mostrar los sensores reales de la maqueta («Datos reales»). Ayuda: <kbd>H</kbd></p>
     </div>`;
   }
 
-  pistas() { return [['1 … 5', 'elegir experiencia'], ['Enter', 'hora punta'], ['H', 'ayuda'], ['M', 'simulación o datos reales']]; }
+  pistas() { return [['1 … 5', 'elegir experiencia'], ['6', 'presentación'], ['Enter', 'hora punta'], ['H', 'ayuda'], ['M', 'simulación o datos reales']]; }
 
   teclas() {
     const t = { Enter: () => this.app.irModo('horaPunta') };
     EXPERIENCIAS.forEach((x, i) => { t[`Digit${i + 1}`] = () => this.app.irModo(x.id); t[`Numpad${i + 1}`] = () => this.app.irModo(x.id); });
+    t.Digit6 = () => this.app.irModo('presentacion');
+    t.Numpad6 = t.Digit6;
     return t;
   }
 
@@ -109,7 +120,7 @@ export class Menu {
 
   // visor: elegir con el tablero
   lineasVR() { return ['BIBLIOAFORO VR', 'Elige una experiencia en el tablero']; }
-  botonesVR() { return EXPERIENCIAS.filter((x) => x.id !== 'caos').map((x) => ({ id: 'm-' + x.id, texto: x.nombre, fn: () => this.app.irModo(x.id) })).concat([{ id: 'm-caos', texto: 'Caos', fn: () => this.app.irModo('caos') }]); }
+  botonesVR() { return EXPERIENCIAS.filter((x) => x.id !== 'caos').map((x) => ({ id: 'm-' + x.id, texto: x.nombre, fn: () => this.app.irModo(x.id) })).concat([{ id: 'm-caos', texto: 'Caos', fn: () => this.app.irModo('caos') }, { id: 'm-presentacion', texto: 'Presentación', fn: () => this.app.irModo('presentacion') }]); }
   textoA() { return 'Hora punta'; }
   accionA() { this.app.irModo('horaPunta'); }
 }

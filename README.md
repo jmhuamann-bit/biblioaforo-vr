@@ -16,6 +16,10 @@ Una biblioteca viva en 3D, en la computadora o con un visor (Meta Quest 3). Los 
 
 El menú (`#/`) muestra la biblioteca viva girando de fondo. Otros enlaces: `#/visor` y `#/sala/1234` (recibir en vivo con un código).
 
+### Sección extra: 🎤 Simulación para presentación (`#/presentacion`)
+
+La biblioteca de Hora punta con los **dos pisos llenos**: solo la **mesa piloto 1-01** tiene **2 de sus 4 sillas libres**. Con el Meta Quest 3 puesto caminas de verdad hacia el sensor S1; cuando el **sensor real** te detecta, en el simulador también entras. Luego vas a la mesa piloto, eliges una silla libre, te sientas y te quedas. Lee el ESP32 del informe o el Arduino de otro programa (se traduce solo o se le enseña con un clic) por USB, y el visor recibe los datos con `#/presentacion/CÓDIGO` o por Air Link. Detalles, calibración y qué es real: [docs/PRESENTACION.md](docs/PRESENTACION.md).
+
 ## Lo que es real y lo que es simulado
 
 - La biblioteca tiene **332 asientos** (96 en la Sala 1 y 236 en la Sala 2) y un aforo de **381** personas. La distribución de mesas es **referencial** (24 y 59 mesas de cuatro, como en el informe); no es el plano oficial.
@@ -69,8 +73,10 @@ La app solo **lee** lo que el ESP32 y la ESP32-CAM ya imprimen por el Monitor Se
 ```
 index.html · estilos.css · estilos-app.css · estilos-juego.css
 docs/DISENO.md             diseño de la experiencia, mecánicas, motor de eventos y estados
+docs/PRESENTACION.md       sección extra: sensores reales, calibración del visor, qué es real
 src/app.js                 experiencias, rutas, ratón, sonido y diálogos
 src/juego/                 menú, Hora punta, Caos, Detective, Ingeniería, Libre, jugador, HUD, mapa, vista aérea
+src/presentacion/          Simulación para presentación: sensores reales, calibración, ayudas 3D
 src/biblioteca/            plano y rutas, estado (332 asientos), reloj del día, multitud (agentes), recomendador, mesa piloto
 src/datos/                 lectura USB (Web Serial), intérprete del Monitor Serie, modo en vivo (MQTT)
 src/escenas/               biblioteca 3D, personas (gente.js), maqueta 3D, ESP32-CAM virtual, siluetas

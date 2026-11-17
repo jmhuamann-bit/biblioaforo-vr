@@ -30,6 +30,8 @@ const MODOS = {
   detective: { ruta: 'detective', nombre: 'Detective', sub: 'el asiento perfecto', cargar: () => import('./juego/detective.js').then((m) => m.Detective) },
   ingenieria: { ruta: 'ingenieria', nombre: 'Ingeniería', sub: 'el prototipo por dentro', cargar: () => import('./juego/ingenieria.js').then((m) => m.Ingenieria) },
   libre: { ruta: 'libre', nombre: 'Libre', sub: 'explora a tu ritmo', cargar: () => import('./juego/libre.js').then((m) => m.Libre) },
+  // sección extra (src/presentacion/): #/presentacion o #/presentacion/1234 (el visor recibe la sala de la laptop)
+  presentacion: { ruta: 'presentacion', nombre: 'Simulación para presentación', sub: 'sensor real + visor', cargar: () => import('./presentacion/presentacion.js').then((m) => m.Presentacion) },
 };
 // rutas de la versión anterior
 const RUTAS_VIEJAS = { estudiante: 'libre', admin: 'caos', tecnico: 'ingenieria', visor: 'menu', sala: 'menu' };
