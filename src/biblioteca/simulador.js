@@ -185,7 +185,7 @@ export class SimuladorBiblioteca {
     let salidas = 0;
     for (let i = 0; i < d && ocupados.length; i++) {
       const a = ocupados.splice(Math.floor(Math.random() * ocupados.length), 1)[0];
-      if (Math.random() < this.probObjeto) { e.fijar(a.id, true, { objeto: true }); a.objetoHasta = e.minuto + 15 + Math.random() * 30; }
+      if (Math.random() < this.probObjeto) { e.fijar(a.id, true, { objeto: true }); a.objetoHasta = e.minuto + 10 + Math.random() * 10; /* reglamento UP: 20 min como máximo */ }
       else e.fijar(a.id, false);
       salidas++;
     }

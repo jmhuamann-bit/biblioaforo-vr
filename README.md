@@ -2,7 +2,7 @@
 
 **Abrir:** https://jmhuamann-bit.github.io/biblioaforo-vr/
 
-Una biblioteca viva en 3D, en la computadora o con un visor (Meta Quest 3). Los estudiantes virtuales llegan desde la plaza, cruzan el sensor de la puerta (que los cuenta), buscan asiento, caminan hasta él (subiendo la escalera si hace falta), se sientan (la cámara de su mesa lo confirma en 0,9 s), estudian un rato y se van por la salida (el otro sensor los descuenta). Todo lo que haces entra en ese mundo y tiene consecuencias visibles en los indicadores, el tótem, los colores de los asientos y el mapa.
+Una biblioteca viva en 3D, en la computadora o con un visor (Meta Quest 3). Está modelada como la **Biblioteca Jorge Basadre Grohmann de la Universidad del Pacífico** (primer piso del Pabellón C): se llega por una galería techada con columnas redondas. Los estudiantes virtuales llegan por esa galería, cruzan el sensor de la puerta (que los cuenta), buscan asiento, caminan hasta él (subiendo la escalera si hace falta), se sientan (la cámara de su mesa lo confirma en 0,9 s), estudian un rato y se van por la salida (el otro sensor los descuenta). Todo lo que haces entra en ese mundo y tiene consecuencias visibles en los indicadores, el tótem, los colores de los asientos y el mapa.
 
 ## Cinco experiencias
 
@@ -12,7 +12,7 @@ Una biblioteca viva en 3D, en la computadora o con un visor (Meta Quest 3). Los 
 | **🌪️ Caos** (`#/caos`) | Tú controlas la biblioteca. | Llegadas de 10, grupos, llegada masiva, salidas, evacuación; clic sobre asientos, mesas y puertas con cuatro «pinceles» (sentar/levantar, mochila, mesa entera, cámara); fallas de cámara y cortes de red; reloj ×1 a ×60 y escenarios. Cinco retos (alta demanda, Sala 1 llena, fila por aforo completo, cámara caída y restablecida, evacuación total). |
 | **🔎 Detective** (`#/detective`) | Encuentra el asiento perfecto para cada estudiante. | Cinco misiones (silencio y enchufe, grupo de 3, ventana en el piso 2, el más cercano, la mesa piloto). Inspeccionas asientos (la mira muestra qué condiciones cumplen), marcas hasta 3 candidatos, los comparas y decides. El estudiante de la misión llega de verdad y se sienta donde elegiste. |
 | **🛠️ Ingeniería** (`#/ingenieria`) | El prototipo por dentro. | La maqueta con los sensores infrarrojos, el ESP32 (LCD y LED) y la ESP32-CAM. Clic en una silla para que alguien entre y se siente, en un sensor para que alguien cruce; siete experimentos y el **Monitor Serie** en vivo con las mismas líneas que el Arduino IDE. Recorrido guiado (`#/ingenieria/recorrido`). |
-| **🧭 Libre** (`#/libre`) | Recorre a tu ritmo. | Diez puntos de interés explican cada pieza del sistema; puedes sentarte, pedir una ruta a cualquier asiento desde el mapa o mirar desde arriba. |
+| **🧭 Libre** (`#/libre`) | Recorre a tu ritmo. | Doce puntos de interés explican cada pieza del sistema (también la entrada real de la UP y sus salas); puedes sentarte, pedir una ruta a cualquier asiento desde el mapa o mirar desde arriba. |
 
 El menú (`#/`) muestra la biblioteca viva girando de fondo. Otros enlaces: `#/visor` y `#/sala/1234` (recibir en vivo con un código).
 
@@ -22,7 +22,8 @@ La biblioteca de Hora punta con los **dos pisos llenos**: solo la **mesa piloto 
 
 ## Lo que es real y lo que es simulado
 
-- La biblioteca tiene **332 asientos** (96 en la Sala 1 y 236 en la Sala 2) y un aforo de **381** personas. La distribución de mesas es **referencial** (24 y 59 mesas de cuatro, como en el informe); no es el plano oficial.
+- La biblioteca tiene **332 asientos** (96 en la Sala 1 y 236 en la Sala 2) y un aforo de **381** personas: el mismo número del cartel real «AFORO 381 PERSONAS» de la entrada. La distribución de mesas es **referencial** (24 y 59 mesas de cuatro, como en el informe); no es el plano oficial.
+- Lo que se tomó de la UP real (fotos y fuentes oficiales, ver [docs/UP.md](docs/UP.md)): la galería del Pabellón C (columnas de concreto caravista, lámparas de campana, piso de porcelanato, marquesina con jardinera, cajeros al fondo), la vitrina con franja esmerilada, el muro «BIBLIOTECA · Jorge Basadre Grohmann», los carteles de horario (L–V 7:30–22:00, sáb. 8:00–20:00) y de aforo, las antenas de seguridad y los diarios de la entrada; adentro, la **Sala 1** (colección 000–599), la **Sala 2** (600–999 y hemeroteca), la **Sala 3** de materiales especiales (acceso restringido), las **salas de estudio grupales** (con reserva, sin cámara: no cuentan entre los 332), las **computadoras** (máx. 1 h), los **carritos** de libros consultados, el módulo de atención y la regla de las **pertenencias que se retiran a los 20 min**.
 - Solo la **mesa piloto 1-01** puede mostrar datos reales: sus cuatro asientos son las zonas A1–A4 de la ESP32-CAM de la maqueta. Todo lo demás es una proyección simulada.
 - **Personas dentro** (sensores de las puertas) y **asientos ocupados** (cámaras) son indicadores distintos y nunca se calculan uno a partir del otro: entrar suma una persona; sentarse ocupa un asiento; quien está de pie, en los estantes o en la fila cuenta como persona pero no como asiento.
 - La insignia de la barra superior siempre dice el origen: **Simulación**, **Datos reales · mesa piloto** o **Esperando sensores**.
@@ -31,7 +32,7 @@ Colores de los asientos: verde libre, rojo ocupado, ámbar apartado con un objet
 
 ## Mecánicas del mundo
 
-- **Estudiantes** con estados: afuera → fila (si el aforo está completo) → entran (sensor S1) → buscan asiento o estante → se sientan (0,9 s de confirmación) → estudian → se levantan → salen (sensor S2). Si su asiento se ocupa antes de llegar, buscan otro; si no hay, esperan de pie en el vestíbulo.
+- **Estudiantes** con estados: llegan por la galería (desde dos pasajes al campus o el extremo abierto) → fila a lo largo de la galería (si el aforo está completo) → entran (sensor S1) → buscan asiento o estante → se sientan (0,9 s de confirmación) → estudian → se levantan → salen (sensor S2). Si su asiento se ocupa antes de llegar, buscan otro; si no hay, esperan de pie en el vestíbulo. Una mochila sola aparta un asiento como máximo 20 minutos (como en el reglamento de la UP).
 - **Estados del entorno:** normal, alta demanda (≥ 85 %), sin asientos libres, aforo completo (fila afuera), incidente (cámaras sin señal).
 - **Rutas** por una grilla de 25 cm (A* para ti, campos de distancia para la multitud) que se recalculan al moverte o cuando cambia la disponibilidad.
 - **Personas realistas**, generadas por código: cuerpos con proporciones naturales (altura, complexión y sexo variables), rostros con ojos, cejas, nariz y labios, 8 expresiones (neutral, sonrisa, concentrado, decidido, hablando, sorpresa, cansado y parpadeo), 9 peinados, ropa con tela, mezclilla, cuadros, rayas y pliegues, lentes, mochilas, celulares y libros. Un esqueleto de 11 huesos las anima: caminan con zancada y balanceo, giran, se sientan y se levantan, teclean, escriben, leen, conversan, se estiran y miran a quien se acerca. Tres niveles de detalle mantienen el visor fluido.
@@ -74,12 +75,13 @@ La app solo **lee** lo que el ESP32 y la ESP32-CAM ya imprimen por el Monitor Se
 index.html · estilos.css · estilos-app.css · estilos-juego.css
 docs/DISENO.md             diseño de la experiencia, mecánicas, motor de eventos y estados
 docs/PRESENTACION.md       sección extra: sensores reales, calibración del visor, qué es real
+docs/UP.md                 investigación de la Biblioteca de la UP: fuentes, fotos y qué se modeló
 src/app.js                 experiencias, rutas, ratón, sonido y diálogos
 src/juego/                 menú, Hora punta, Caos, Detective, Ingeniería, Libre, jugador, HUD, mapa, vista aérea
 src/presentacion/          Simulación para presentación: sensores reales, calibración, ayudas 3D
 src/biblioteca/            plano y rutas, estado (332 asientos), reloj del día, multitud (agentes), recomendador, mesa piloto
 src/datos/                 lectura USB (Web Serial), intérprete del Monitor Serie, modo en vivo (MQTT)
-src/escenas/               biblioteca 3D, personas (gente.js), maqueta 3D, ESP32-CAM virtual, siluetas
+src/escenas/               biblioteca 3D, galería del Pabellón C (galeria.js), salas de la UP (interiorUP.js), personas, maqueta 3D, ESP32-CAM virtual
 src/escenas/humanos/       aspecto, cuerpos y peinados, rostros y telas, esqueleto y material de las personas
 src/sim/                   firmware de los Anexos A y B emulado, director de la maqueta
 src/control/               teclado y ratón, visor (WebXR), paneles 3D

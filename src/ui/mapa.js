@@ -45,7 +45,7 @@ export class Mapa {
     } else {
       el('rect', { x: P.x0, y: P.vestibuloZ, width: P.x1 - P.x0, height: P.z1 - P.vestibuloZ, class: 'm-vestibulo' }, g);
       this.#texto(g, P.x0 + 0.6, P.vestibuloZ + 1.0, 'VESTÍBULO', 'm-zona-etq vestibulo');
-      // puertas y plaza
+      // puertas y galería
       for (const clave of ['entrada', 'salida']) {
         const pu = P.puertas[clave];
         el('rect', { x: pu.x0, y: P.z1 - 0.15, width: pu.x1 - pu.x0, height: 0.3, class: 'm-puerta' }, g);
@@ -56,7 +56,15 @@ export class Mapa {
       this.#texto(g, T.x, T.z - 0.5, 'Tótem', 'm-etq-centro peq');
       const Mo = P.mostrador;
       el('rect', { x: Mo.x0, y: Mo.z0, width: Mo.x1 - Mo.x0, height: Mo.z1 - Mo.z0, rx: 0.1, class: 'm-mueble' }, g);
-      this.#texto(g, (Mo.x0 + Mo.x1) / 2, Mo.z0 - 0.35, 'Préstamos', 'm-etq-centro peq');
+      this.#texto(g, (Mo.x0 + Mo.x1) / 2, Mo.z0 - 0.35, 'Módulo de atención', 'm-etq-centro peq');
+    }
+    // espacios de la Biblioteca UP (no tienen asientos monitoreados)
+    const salas = [['sala3', 'Sala 3 · materiales especiales'], ['salasEstudio', 'Salas de estudio'], ['computadoras', 'PC'], ['hemeroteca', 'Hemeroteca'], ['diarios', '']];
+    for (const [k, nombre] of salas) {
+      const o = P[k];
+      if (o.piso !== piso) continue;
+      el('rect', { x: o.x0, y: o.z0, width: o.x1 - o.x0, height: o.z1 - o.z0, rx: 0.12, class: 'm-mueble' }, g);
+      if (nombre) this.#texto(g, (o.x0 + o.x1) / 2, (o.z0 + o.z1) / 2, nombre, 'm-etq-centro peq');
     }
     // muros con ventanas
     el('line', { x1: P.x1, y1: P.z0, x2: P.x1, y2: P.z1, class: 'm-ventana' }, g);

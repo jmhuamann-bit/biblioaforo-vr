@@ -3,9 +3,10 @@
 // Lo que hacen pasa por los mismos indicadores del sistema:
 //   cruzar la puerta → sensor S1/S2 → personas dentro · sentarse → cámara de la mesa (0,9 s) → asiento ocupado
 import { Emisor } from '../datos/estado.js';
-import { PLANO, rutaLlegada, rutaSalida, rutaInterior, ESPERA, ESTANTES_FRENTE, puestoCola, yPiso, campoRuta, accesoAsiento, campoDistancias } from './plano.js';
+import { PLANO, rutaLlegada, rutaSalida, rutaInterior, ESPERA, ESTANTES_FRENTE, puestoCola, yPiso, campoRuta, accesoAsiento, campoDistancias, origenCampus, caminoGaleria, caminoAlCampus } from './plano.js';
 
 const CONFIRMACION_S = 0.9;              // 3 lecturas × 300 ms de la ESP32-CAM
+const PERTENENCIAS_MIN = 20;             // reglamento UP: a los 20 min, seguridad retira lo que se dejó en un sitio
 const MAX_CAMINANTES = 110;
 const azarEntre = (a, b) => a + Math.random() * (b - a);
 const poisson = (l) => { if (l <= 0) return 0; if (l > 30) return Math.max(0, Math.round(l + Math.sqrt(l) * gauss())); const L = Math.exp(-l); let k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; };
@@ -47,7 +48,7 @@ export class Multitud extends Emisor {
     for (const a of this.estado.asientos) {
       this.verdad.set(a.id, { ocupado: a.ocupado, objeto: a.objeto });
       if (a.ocupado && !a.estudiante && !(a.piloto && this.estado.pilotoReal)) {
-        this.ocupantes.set(a.id, { hasta: min + (a.objeto ? azarEntre(5, 30) : -Math.log(1 - Math.random()) * this.sim.estancia * 0.8 + 0.4), objeto: a.objeto, semilla: nuevaSemilla() });
+        this.ocupantes.set(a.id, { hasta: min + (a.objeto ? azarEntre(4, PERTENENCIAS_MIN) : -Math.log(1 - Math.random()) * this.sim.estancia * 0.8 + 0.4), objeto: a.objeto, semilla: nuevaSemilla() });
       }
     }
     // precálculo de las rutas (evita un tirón con la primera llegada)
@@ -123,14 +124,15 @@ export class Multitud extends Emisor {
     ag.d = 0;
   }
 
-  // Llega un estudiante desde la plaza
+  // Llega un estudiante desde el campus (por un pasaje o el extremo abierto de la galería)
   // forzar: va sí o sí al asiento preferido (acciones del usuario)
   llegar({ preferir = null, grupoAsiento = null, retraso = 0, rival = false, forzar = false } = {}) {
     const visibles = this.agentes.filter((a) => a.visible).length;
     // sin espacio para más figuras: entra "directo" (cuenta y se sienta), sin animación
     if (visibles >= MAX_CAMINANTES && !rival && !forzar) return this.#llegadaDirecta();
     const xP = (PLANO.puertas.entrada.x0 + PLANO.puertas.entrada.x1) / 2;
-    const ag = this.#nuevo({ x: xP + azarEntre(-5, 5), z: PLANO.z1 + azarEntre(14, 22), retraso });
+    const o = origenCampus();
+    const ag = this.#nuevo({ x: o.x, z: o.z, retraso });
     ag.y = 0;
     if (this.#aforoLleno()) { this.#aCola(ag); return ag; }
     this.#asignarDestino(ag, { preferir, grupoAsiento, rival, forzar });
@@ -143,20 +145,26 @@ export class Multitud extends Emisor {
     if (asiento && (forzar || grupoAsiento || Math.random() > 0.08)) {
       ag.asiento = asiento.id; ag.destino = 'asiento';
       this.reservas.set(asiento.id, ag);
-      this.#seguir(ag, [{ x: ag.x, y: 0, z: ag.z }, ...rutaLlegada(null, asiento)]);
+      this.#seguir(ag, [...this.#porGaleria(ag), ...rutaLlegada(null, asiento)]);
     } else if (!asiento && Math.random() < 0.85) {
       // no hay asiento: espera de pie en el vestíbulo y vuelve a intentar
       const p = ESPERA[Math.floor(Math.random() * ESPERA.length)];
       ag.destino = 'espera';
-      this.#seguir(ag, [{ x: ag.x, y: 0, z: ag.z }, ...rutaLlegada({ x: p.x + azarEntre(-0.8, 0.8), z: p.z + azarEntre(-0.6, 0.6), piso: 1 })]);
+      this.#seguir(ag, [...this.#porGaleria(ag), ...rutaLlegada({ x: p.x + azarEntre(-0.8, 0.8), z: p.z + azarEntre(-0.6, 0.6), piso: 1 })]);
     } else {
       // viene a buscar libros
       const p = ESTANTES_FRENTE[Math.floor(Math.random() * ESTANTES_FRENTE.length)];
       ag.destino = 'estante';
-      this.#seguir(ag, [{ x: ag.x, y: 0, z: ag.z }, ...rutaLlegada({ ...p })]);
+      this.#seguir(ag, [...this.#porGaleria(ag), ...rutaLlegada({ ...p })]);
     }
     ag.estado = 'caminando';
     if (ag.rival) { this.rival = ag; this.emit('rival', ag); }
+  }
+
+  // Camino por la galería (sin atravesar columnas ni el ala de enfrente) hasta la puerta de entrada
+  #porGaleria(ag) {
+    const xP = (PLANO.puertas.entrada.x0 + PLANO.puertas.entrada.x1) / 2;
+    return ag.z > PLANO.z1 + 0.5 ? caminoGaleria(ag, xP) : [{ x: ag.x, y: 0, z: ag.z }];
   }
 
   #llegadaDirecta() {
@@ -173,7 +181,8 @@ export class Multitud extends Emisor {
     ag.destino = 'cola';
     this.cola.push(ag);
     const p = puestoCola(this.cola.length - 1);
-    this.#seguir(ag, [{ x: ag.x, y: 0, z: ag.z }, p]);
+    const desdePasaje = ag.z > PLANO.galeria.z1 - 0.3 ? [{ x: ag.x, y: 0, z: PLANO.galeria.zEje }] : [];
+    this.#seguir(ag, [{ x: ag.x, y: 0, z: ag.z }, ...desdePasaje, p]);
     if (this.cola.length === 1) this.emit('alerta', { tipo: 'aforo', texto: 'Aforo completo: la entrada se bloquea y se forma una fila afuera.' });
   }
 
@@ -229,7 +238,7 @@ export class Multitud extends Emisor {
     if (ag.asiento && this.reservas.get(ag.asiento) === ag) this.reservas.delete(ag.asiento);
     ag.estado = 'saliendo'; ag.destino = 'salida'; ag.asiento = null; ag.visible = true;
     if (this.rival === ag) this.rival = null;
-    this.#seguir(ag, [{ x: ag.x, y: 0, z: ag.z }, { x: ag.x + azarEntre(-4, 4), y: 0, z: PLANO.z1 + azarEntre(16, 24) }]);
+    this.#seguir(ag, [{ x: ag.x, y: 0, z: ag.z }, ...caminoAlCampus(ag)]);
   }
 
   // Quien está sentado en ese asiento se levanta (0,9 s) y se va por la salida
@@ -286,7 +295,7 @@ export class Multitud extends Emisor {
     const a = this.estado.get(id);
     if (!a || !this.#asientoDisponible(a)) return false;
     this.#fijar(id, true, { objeto: true });
-    this.ocupantes.set(id, { hasta: this.estado.minuto + azarEntre(12, 35), objeto: true });
+    this.ocupantes.set(id, { hasta: this.estado.minuto + azarEntre(10, PERTENENCIAS_MIN), objeto: true });
     return true;
   }
   quitarObjeto(id) {
@@ -304,7 +313,7 @@ export class Multitud extends Emisor {
     for (let i = 0; i < n && libres.length; i++) {
       const a = libres.splice(Math.floor(Math.random() * libres.length), 1)[0];
       this.#fijar(a.id, true, { objeto: true });
-      this.ocupantes.set(a.id, { hasta: this.estado.minuto + azarEntre(12, 35), objeto: true });
+      this.ocupantes.set(a.id, { hasta: this.estado.minuto + azarEntre(10, PERTENENCIAS_MIN), objeto: true });
     }
     this.estado.log('objeto', `${n} asientos apartados con mochilas: la cámara los ve ocupados`);
   }
@@ -486,7 +495,10 @@ export class Multitud extends Emisor {
     const ag = this.#nuevo({ x: a.x, y: yPiso(a.piso), z: a.z, piso: a.piso, dentro: true, estado: 'levantandose', t: CONFIRMACION_S, ...(o.semilla ? { semilla: o.semilla } : {}) });
     ag.asientoDejado = id;
     ag.dejaObjeto = !sinObjeto && !o.objeto && Math.random() < this.sim.probObjeto;
-    if (o.objeto) { ag.visible = false; this.#retirar(ag); this.#fijar(id, false); }
+    if (o.objeto) {
+      ag.visible = false; this.#retirar(ag); this.#fijar(id, false);
+      if (!sinObjeto) this.estado.log('objeto', `${id}: seguridad retiró una mochila sola (más de ${PERTENENCIAS_MIN} min, reglamento de la Biblioteca UP)`);
+    }
   }
 
   // ------------------------------------------------------------ ciclo
@@ -555,7 +567,7 @@ export class Multitud extends Emisor {
         return;
       }
       if (ag.estado === 'levantandose') {
-        if (ag.dejaObjeto) { this.#fijar(ag.asientoDejado, true, { objeto: true }); this.ocupantes.set(ag.asientoDejado, { hasta: this.estado.minuto + azarEntre(15, 40), objeto: true }); }
+        if (ag.dejaObjeto) { this.#fijar(ag.asientoDejado, true, { objeto: true }); this.ocupantes.set(ag.asientoDejado, { hasta: this.estado.minuto + azarEntre(12, PERTENENCIAS_MIN), objeto: true }); }
         else this.#fijar(ag.asientoDejado, false);
         this.emit('agente', { tipo: 'seVa', ag });
         this.#salir(ag);

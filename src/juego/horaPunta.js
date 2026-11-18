@@ -2,7 +2,7 @@
 // Todo es consecuencia del sistema: al cruzar la puerta, el sensor S1 te cuenta; los demás estudiantes
 // también buscan asiento; si alguien ocupa el tuyo antes de que llegues, la cámara de esa mesa lo
 // detecta, el asiento se pone rojo y la app te lleva al libre más cercano.
-import { PLANO, ruta, rutaLlegada, alturaSuelo, accesoAsiento, NOMBRE_ZONA, PUNTOS, yPiso } from '../biblioteca/plano.js';
+import { PLANO, ruta, rutaLlegada, alturaSuelo, accesoAsiento, NOMBRE_ZONA, PUNTOS, yPiso, caminoGaleria } from '../biblioteca/plano.js';
 import { camposDesde, distanciaAsiento } from '../biblioteca/recomendador.js';
 import { describirObjeto } from './jugador.js';
 import * as H from './hudJuego.js';
@@ -140,7 +140,7 @@ export class HoraPunta {
         if (this.m.sentandoseEn(a.id)) { info.titulo = `Asiento ${a.id} · alguien se está sentando`; info.alerta = true; }
         else if (this.dentro && this.#cerca(a)) info.accion = 'E · Sentarte aquí';
         else info.accion = this.objetivo?.id === a.id ? 'Tu destino' : 'E · Ir a este asiento';
-      } else if (info.estado === 'objeto') info.detalle = 'Una mochila lo aparta: la cámara lo ve ocupado';
+      } else if (info.estado === 'objeto') info.detalle = 'Una mochila lo aparta (la cámara lo ve ocupado). Reglamento UP: a los 20 min, seguridad la retira';
     } else if (h.tipo === 'mesa') {
       const libres = this.b.asientos.filter((a) => a.mesa === h.id && this.b.estadoDe(a) === 'libre').length;
       if (libres) info.accion = 'E · Ir a un asiento libre de esta mesa';
@@ -260,7 +260,7 @@ export class HoraPunta {
       if (p.z > PLANO.z1 - 0.3) pts = [{ x: p.x, y: 0, z: p.z }, { x: XS, y: 0, z: PLANO.z1 + 3 }];
       else pts = [...ruta(p, PUNTOS.salidaInterior).pts, { x: XS, y: 0, z: PLANO.z1 + 1.2 }, { x: XS, y: 0, z: PLANO.z1 + 3 }];
     } else if (p.z > PLANO.z1 - 0.3) {
-      pts = [{ x: p.x, y: 0, z: p.z }, ...rutaLlegada(null, a)];
+      pts = [...caminoGaleria(p, XP), ...rutaLlegada(null, a)];
     } else {
       pts = ruta(p, a, { asiento: a }).pts;
     }

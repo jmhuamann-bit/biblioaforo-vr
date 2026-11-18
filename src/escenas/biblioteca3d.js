@@ -1,4 +1,5 @@
-// Biblioteca en 3D: dos pisos, fachada, escalera en U, 83 mesas y 332 sillas.
+// Biblioteca en 3D: dos pisos, fachada, escalera en U, 83 mesas y 332 sillas, frente a la galería
+// del Pabellón C (como la Biblioteca de la Universidad del Pacífico).
 // Todo lo repetido se dibuja por instancias (pocas llamadas de dibujo: fluido en el Meta Quest).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -7,6 +8,8 @@ import * as TX from '../motor/texturas.js';
 import { etiqueta, Pantalla, FUENTE, rectRedondo } from '../motor/textos.js';
 import { COLORES } from '../config.js';
 import { Gente } from './gente.js';
+import { Galeria } from './galeria.js';
+import { construirInteriorUP } from './interiorUP.js';
 
 const H = PLANO.alturaPiso, HS = PLANO.alturaSala;
 const ANCHO = PLANO.x1 - PLANO.x0, FONDO = PLANO.z1 - PLANO.z0;
@@ -64,6 +67,8 @@ export class Biblioteca3D {
     this.explosion = 0;
     this.#materiales();
     this.#exterior();
+    this.galeria = new Galeria({ mat: this.mat });
+    this.exterior.add(this.galeria.grupo);
     this.#estructura();
     this.#escalera();
     this.#mobiliario();
@@ -72,6 +77,7 @@ export class Biblioteca3D {
     this.#senales();
     this.#luminarias();
     this.#enchufes();
+    construirInteriorUP(this);
     this.#separarMateriales();
     this.#ruta();
     this.#caminantes();
@@ -186,24 +192,23 @@ export class Biblioteca3D {
     this.texturaHalo = TX.halo();
   }
 
-  // ---------------------------------------------------------------- exterior: plaza, césped, árboles
+  // ---------------------------------------------------------------- exterior: césped y árboles del campus (adelante está la galería)
   #exterior() {
     const g = this.exterior;
-    const adoquin = baldosas({ base: 0xb9b4aa, junta: 0x8f897e, n: 6, semilla: 12, variacion: 0.08 });
-    adoquin.repeat.set(92, 28);
-    const plaza = new THREE.Mesh(new THREE.PlaneGeometry(110, 34), new THREE.MeshStandardMaterial({ map: adoquin, roughness: 0.85 }));
-    plaza.rotation.x = -Math.PI / 2; plaza.position.set(0, -0.02, PLANO.z1 + 17);
+    const G = PLANO.galeria;
     const pasto = TX.grano({ tam: 256, base: 0x5f8f4a, variacion: 0.12, escala: 18, semilla: 4, fuerzaNormal: 0.6 });
     pasto.map.repeat.set(30, 30); pasto.normalMap.repeat.set(30, 30);
     const cesped = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.MeshStandardMaterial({ map: pasto.map, normalMap: pasto.normalMap, roughness: 1 }));
     cesped.rotation.x = -Math.PI / 2; cesped.position.y = -0.05;
-    g.add(cesped, plaza);
+    g.add(cesped);
     // árboles (instancias)
     const r = TX.azar(77);
     const pos = [];
-    for (let i = 0; i < 14; i++) pos.push([-48 + i * 7.4 + (r() - 0.5) * 2, PLANO.z1 + 26 + (r() - 0.5) * 3]);
-    for (let i = 0; i < 8; i++) pos.push([PLANO.x1 + 8 + r() * 10, -12 + i * 6]);
-    for (let i = 0; i < 8; i++) pos.push([PLANO.x0 - 8 - r() * 10, -12 + i * 6]);
+    for (let i = 0; i < 14; i++) pos.push([-36 + i * 7 + (r() - 0.5) * 2, G.z1 + G.profundidadAla + 5 + (r() - 0.5) * 3]);   // detrás del ala de enfrente
+    for (let i = 0; i < 6; i++) pos.push([G.x1 + 7 + r() * 8, PLANO.z1 - 6 + i * 5.5]);                               // más allá del extremo abierto
+    for (let i = 0; i < 6; i++) pos.push([PLANO.x0 - 9 - r() * 8, -12 + i * 4.6]);
+    for (let i = 0; i < 5; i++) pos.push([PLANO.x1 + 8 + r() * 6, -14 + i * 3.4]);
+    for (let i = 0; i < 8; i++) pos.push([-26 + i * 7 + (r() - 0.5) * 2, PLANO.z0 - 7 - r() * 3]);
     const tronco = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.24, 3, 7), new THREE.MeshStandardMaterial({ color: 0x5a4330, roughness: 1 }), pos.length);
     const copa = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(2.2, 1), new THREE.MeshStandardMaterial({ color: 0x3f7a3a, roughness: 0.95, flatShading: true }), pos.length);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
@@ -214,12 +219,6 @@ export class Biblioteca3D {
       q.identity();
     });
     g.add(tronco, copa);
-    // bancas
-    for (const x of [-12, 14]) {
-      const banca = new THREE.Mesh(geoCaja(3, 0.45, 0.7, 0, 0.225, 0), this.mat.concreto);
-      banca.position.set(x, 0, PLANO.z1 + 8);
-      g.add(banca);
-    }
   }
 
   // ---------------------------------------------------------------- estructura: losas, muros, vidrio, techos
@@ -286,11 +285,15 @@ export class Biblioteca3D {
       for (let z = PLANO.z0; z <= PLANO.z1 + 0.01; z += FONDO / 10) montantes.push([PLANO.x1, y0 + alto / 2, z, 0.12, alto, 0.12]);
       montantes.push([PLANO.x1, y0 + 0.06, 0, 0.14, 0.12, FONDO], [PLANO.x1, y0 + alto - 0.06, 0, 0.14, 0.12, FONDO], [PLANO.x1, y0 + 1.1, 0, 0.1, 0.06, FONDO]);
       vidrios.push({ x: PLANO.x1, y: y0 + alto / 2, z: 0, w: FONDO, h: alto, ry: Math.PI / 2, piso });
-      // fachada
-      for (let x = PLANO.x0; x <= PLANO.x1 + 0.01; x += ANCHO / 14) montantes.push([x, y0 + alto / 2, PLANO.z1, 0.12, alto, 0.12]);
-      montantes.push([0, y0 + 0.06, PLANO.z1, ANCHO, 0.12, 0.14], [0, y0 + alto - 0.06, PLANO.z1, ANCHO, 0.12, 0.14]);
-      if (piso === 2) montantes.push([0, y0 + 1.1, PLANO.z1, ANCHO, 0.06, 0.1]);
-      vidrios.push({ x: 0, y: y0 + alto / 2, z: PLANO.z1, w: ANCHO, h: alto, ry: 0, piso });
+      // fachada del piso 2 hacia la galería: franja de ventanas entre muros grises (la del piso 1 es la vitrina de la galería)
+      if (piso === 2) {
+        const v0 = y0 + 1.7, v1 = y0 + 3.4;
+        for (let x = PLANO.x0; x <= PLANO.x1 + 0.01; x += ANCHO / 14) montantes.push([x, (v0 + v1) / 2, PLANO.z1, 0.1, v1 - v0, 0.1]);
+        montantes.push([0, v0, PLANO.z1, ANCHO, 0.08, 0.12], [0, v1, PLANO.z1, ANCHO, 0.08, 0.12]);
+        vidrios.push({ x: 0, y: (v0 + v1) / 2, z: PLANO.z1, w: ANCHO, h: v1 - v0, ry: 0, piso });
+        const muroG = new THREE.MeshStandardMaterial({ color: 0xb3b5b6, roughness: 0.9 });
+        this.pisos[2].add(new THREE.Mesh(mergeGeometries([geoCaja(ANCHO + 0.6, v0 - y0, 0.3, 0, (y0 + v0) / 2, PLANO.z1 + 0.15), geoCaja(ANCHO + 0.6, y0 + alto - v1, 0.3, 0, (v1 + y0 + alto) / 2, PLANO.z1 + 0.15)]), muroG));
+      }
     }
     // borde de losa visible en fachada
     montantes.push([0, H - 0.15, PLANO.z1 + 0.05, ANCHO + 0.6, 0.6, 0.3], [PLANO.x1 + 0.05, H - 0.15, 0, 0.3, 0.6, FONDO + 0.6]);
@@ -303,34 +306,14 @@ export class Biblioteca3D {
       this.pisos[piso].add(inst);
     }
     for (const v of vidrios) {
-      // en la fachada del piso 1 se dejan libres los vanos de las puertas
-      if (v.piso === 1 && v.ry === 0) {
-        const tramos = [[PLANO.x0, PLANO.puertas.entrada.x0], [PLANO.puertas.entrada.x1, PLANO.puertas.salida.x0], [PLANO.puertas.salida.x1, PLANO.x1]];
-        for (const [a, b] of tramos) {
-          const p = new THREE.Mesh(new THREE.PlaneGeometry(b - a, v.h), this.mat.vidrio);
-          p.position.set((a + b) / 2, v.y, v.z); this.pisos[1].add(p);
-        }
-        // sobre las puertas
-        for (const pu of [PLANO.puertas.entrada, PLANO.puertas.salida]) {
-          const p = new THREE.Mesh(new THREE.PlaneGeometry(pu.x1 - pu.x0, H - 2.6), this.mat.vidrio);
-          p.position.set((pu.x0 + pu.x1) / 2, 2.6 + (H - 2.6) / 2, v.z); this.pisos[1].add(p);
-        }
-        continue;
-      }
       const p = new THREE.Mesh(new THREE.PlaneGeometry(v.w, v.h), this.mat.vidrio);
       p.position.set(v.x, v.y, v.z); p.rotation.y = v.ry;
       this.pisos[v.piso].add(p);
     }
-    // rótulo de la fachada
-    const rotulo = etiqueta('BIBLIOTECA', { alto: 0.75, color: '#f8fafc', fondo: null, tamFuente: 120, relleno: 0.15 });
-    rotulo.position.set(-8, H + 0.1, PLANO.z1 + 0.24);
-    const sub = etiqueta('BiblioAforo · asientos libres en vivo', { alto: 0.32, color: '#bae6fd', fondo: 'rgba(11,18,32,0.75)', tamFuente: 64 });
-    sub.position.set(-8, H - 0.62, PLANO.z1 + 0.24);
-    this.pisos[1].add(rotulo, sub);
-    // pilares en la fachada y la derecha
-    const pilares = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, H + HS + 0.45, 0.5), this.mat.concreto, 8);
+    // pilares en las esquinas y a la derecha (adelante están las columnas redondas de la galería)
+    const pilares = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, H + HS + 0.45, 0.5), this.mat.concreto, 6);
     const mm = new THREE.Matrix4();
-    [[PLANO.x0, PLANO.z1], [PLANO.x1, PLANO.z1], [PLANO.x1, PLANO.z0], [PLANO.x0, PLANO.z0], [-11.5, PLANO.z1], [11.5, PLANO.z1], [PLANO.x1, 0], [PLANO.x0, 0]].forEach(([x, z], i) => {
+    [[PLANO.x0, PLANO.z1], [PLANO.x1, PLANO.z1], [PLANO.x1, PLANO.z0], [PLANO.x0, PLANO.z0], [PLANO.x1, 0], [PLANO.x0, 0]].forEach(([x, z], i) => {
       mm.makeTranslation(x, (H + HS + 0.45) / 2, z); pilares.setMatrixAt(i, mm);
     });
     this.techo.add(pilares);
@@ -540,6 +523,11 @@ export class Biblioteca3D {
       const hojaIzq = new THREE.Mesh(new THREE.PlaneGeometry(ancho / 2, 2.5), this.mat.vidrio);
       const hojaDer = hojaIzq.clone();
       hojaIzq.position.set(cx - ancho / 4, 1.25, p.z - 0.05); hojaDer.position.set(cx + ancho / 4, 1.25, p.z - 0.05);
+      for (const hoja of [hojaIzq, hojaDer]) {
+        const franja = new THREE.Mesh(new THREE.PlaneGeometry(ancho / 2 - 0.04, 0.34), this.galeria.franjaMat);
+        franja.position.set(0, 1.22 - 1.25, 0.01);
+        hoja.add(franja);
+      }
       // cartel verde
       const cartel = etiqueta(p.nombre, { alto: 0.22, color: '#ffffff', fondo: '#15803d', tamFuente: 72, relleno: 0.3, radio: 0.12 });
       cartel.position.set(cx, 2.95, p.z + 0.13);
@@ -574,7 +562,7 @@ export class Biblioteca3D {
       geoCaja(Mo.x1 - Mo.x0, 1.05, Mo.z1 - Mo.z0, (Mo.x0 + Mo.x1) / 2, 0.525, (Mo.z0 + Mo.z1) / 2),
     ]), this.mat.mesa);
     const cubierta = new THREE.Mesh(geoCaja(Mo.x1 - Mo.x0 + 0.1, 0.05, Mo.z1 - Mo.z0 + 0.1, (Mo.x0 + Mo.x1) / 2, 1.075, (Mo.z0 + Mo.z1) / 2), new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.3 }));
-    const rotM = etiqueta('Préstamos', { alto: 0.16, color: '#0f172a', fondo: null, tamFuente: 64 });
+    const rotM = etiqueta('Módulo de atención · préstamo y devolución', { alto: 0.11, color: '#0f172a', fondo: null, tamFuente: 64 });
     rotM.position.set((Mo.x0 + Mo.x1) / 2, 0.7, Mo.z1 + 0.01);
     mostrador.castShadow = true;
     g.add(mostrador, cubierta, rotM);
@@ -582,7 +570,7 @@ export class Biblioteca3D {
     const maceta = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.3, 0.24, 0.55, 20), new THREE.MeshStandardMaterial({ color: 0xd9d3c7, roughness: 0.8 }), 4);
     const hojas = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.55, 1), new THREE.MeshStandardMaterial({ color: 0x2f6b3a, roughness: 0.8, flatShading: true }), 4);
     const m4 = new THREE.Matrix4();
-    [[-14, 11.8], [19, 11.8], [-8, 7.6], [18.5, 7.6]].forEach(([x, z], i) => {
+    [[-14, 11.8], [16.05, 12.6], [-8, 7.6], [16.05, 6.35]].forEach(([x, z], i) => {
       m4.makeTranslation(x, 0.275, z); maceta.setMatrixAt(i, m4);
       m4.makeScale(1, 1.4, 1); m4.setPosition(x, 1.05, z); hojas.setMatrixAt(i, m4);
     });
@@ -606,10 +594,14 @@ export class Biblioteca3D {
     zona(-16.2, 2.6, 0x14b8a6);
     zona(2.6, 22.5, 0xf59e0b);
     // carteles colgantes de las salas
-    const s1 = etiqueta('SALA 1 · 96 asientos', { alto: 0.3, color: '#f8fafc', fondo: 'rgba(15,23,42,0.85)', tamFuente: 72 });
+    const s1 = etiqueta('SALA 1 · 96 asientos · colección 000–599', { alto: 0.26, color: '#f8fafc', fondo: 'rgba(31,58,109,0.92)', tamFuente: 72 });
     s1.position.set(4, H - 0.85, 6.5);
     const s1b = s1.clone(); s1b.rotation.y = Math.PI; s1b.position.z -= 0.02;
     this.pisos[1].add(s1, s1b);
+    const s2 = etiqueta('SALA 2 · 236 asientos · colección 600–999 · hemeroteca', { alto: 0.24, color: '#f8fafc', fondo: 'rgba(31,58,109,0.92)', tamFuente: 72 });
+    s2.position.set(-11.5, H + HS - 0.7, 11.6);
+    const s2b = s2.clone(); s2b.rotation.y = Math.PI; s2b.position.z -= 0.02;
+    this.pisos[2].add(s2, s2b);
   }
 
   // ---------------------------------------------------------------- luminarias del techo (emisivas)
@@ -802,7 +794,11 @@ export class Biblioteca3D {
     this.explosion = t * 7.5;
     this.pisos[2].position.y = this.explosion;
     this.techo.visible = t < 0.02;
+    this.galeria.desdeArriba(t >= 0.02 || !!this.galeriaArriba);
   }
+
+  // vista aérea: sin el techo alto de la galería (para ver a quienes llegan)
+  verGaleriaDesdeArriba(v) { this.galeriaArriba = v; this.galeria.desdeArriba(v || this.explosion > 0.15); }
 
   pulsarPuerta(clave) {
     const p = this.puertasVis[clave];

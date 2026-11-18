@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Biblioteca3D, dibujarTotem } from './biblioteca3d.js';
-import { PLANO, yPiso, alturaSuelo, transitable } from '../biblioteca/plano.js';
+import { PLANO, yPiso, alturaSuelo, transitable, transitableGaleria } from '../biblioteca/plano.js';
 import * as TX from '../motor/texturas.js';
 
 export class EscenaBiblioteca {
@@ -44,7 +44,7 @@ export class EscenaBiblioteca {
   vistas() {
     const E = this.b3d.explosion;
     return {
-      fachada: { pos: [5.5, 2.4, 37], obj: [-1.5, 4.0, 13] },
+      fachada: { pos: [15, 1.7, PLANO.z1 + 8.5], obj: [0.5, 2.2, PLANO.z1] },
       casa: { pos: [27, 27, 33], obj: [-1, 5.5, -1] },
       piso1: { pos: [0, 34, 12], obj: [0, 0, 0.5] },
       piso2: { pos: [0, 38 + E, 12], obj: [0, 4.5 + E, 0.5] },
@@ -76,22 +76,24 @@ export class EscenaBiblioteca {
   verDesdeArriba(piso) {
     this.b3d.techo.visible = false;
     this.b3d.pisos[2].visible = piso !== 1;
+    this.b3d.verGaleriaDesdeArriba(true);
   }
   restaurarVisibilidad() {
     this.b3d.pisos[2].visible = true;
     this.b3d.techo.visible = this.b3d.explosion < 0.05;
+    this.b3d.verGaleriaDesdeArriba(false);
   }
 
   // ---------------------------------------------------------------- caminar (escritorio y visor)
   alturaSuelo(x, z, nivel = 1) { return alturaSuelo(x, z, nivel) + (nivel === 2 || alturaSuelo(x, z, nivel) > 3.4 ? this.b3d.explosion : 0); }
   transitable(x, z, nivel = 1) {
-    // fuera del edificio solo la plaza frente a las puertas
+    // fuera del edificio: la galería del Pabellón C (columnas, maceteros y pasajes al campus)
     if (z > PLANO.z1 - 0.2) {
       if (nivel !== 1) return false;
       const P = PLANO.puertas;
       const enPuerta = (x > P.entrada.x0 + 0.3 && x < P.entrada.x1 - 0.3) || (x > P.salida.x0 + 0.3 && x < P.salida.x1 - 0.3);
       if (z < PLANO.z1 + 0.4) return enPuerta;
-      return x > -40 && x < 40 && z < PLANO.z1 + 30;
+      return transitableGaleria(x, z);
     }
     return transitable(x, z, nivel);
   }

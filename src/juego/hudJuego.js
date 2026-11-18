@@ -92,8 +92,8 @@ export class Minimapa {
     const piso = pos?.piso || 1;
     const W = c.width, H = c.height;
     ctx.clearRect(0, 0, W, H);
-    // el edificio y la plaza de la entrada (16 m) caben completos
-    const zMax = PLANO.z1 + 16;
+    // el edificio y la galería de la entrada caben completos
+    const zMax = PLANO.galeria.z1 + 1;
     const esc = Math.min((W - 12) / (PLANO.x1 - PLANO.x0 + 2), (H - 30) / (zMax - PLANO.z0 + 1));
     const ox = (W - (PLANO.x1 - PLANO.x0) * esc) / 2, oy = 26;
     const X = (x) => ox + (x - PLANO.x0) * esc, Y = (z) => oy + (z - PLANO.z0) * esc;
@@ -101,10 +101,18 @@ export class Minimapa {
     ctx.fillText(`Piso ${piso} · Sala ${piso}`, 10, 16);
     ctx.textAlign = 'right'; ctx.fillStyle = '#4ade80';
     ctx.fillText(`${b.libres(piso)} libres`, W - 10, 16);
-    if (piso === 1) { ctx.fillStyle = '#141d2e'; ctx.fillRect(X(PLANO.x0), Y(PLANO.z1), (PLANO.x1 - PLANO.x0) * esc, (zMax - PLANO.z1) * esc); ctx.fillStyle = '#64748b'; ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('plaza', X(0.5), Y(zMax) - 6); }
+    if (piso === 1) {
+      const G = PLANO.galeria;
+      ctx.fillStyle = '#18233a'; ctx.fillRect(X(PLANO.x0), Y(PLANO.z1), (PLANO.x1 - PLANO.x0) * esc, (G.z1 - PLANO.z1) * esc);
+      ctx.fillStyle = '#475569'; for (const cx of G.columnas) if (cx > PLANO.x0 && cx < PLANO.x1) { ctx.beginPath(); ctx.arc(X(cx), Y(G.zColumnas), 2, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = '#64748b'; ctx.font = '600 11px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('galería · Pabellón C', X(0.5), Y(G.z1) - 4);
+    }
     ctx.fillStyle = '#1b2740'; ctx.fillRect(X(PLANO.x0), Y(PLANO.z0), (PLANO.x1 - PLANO.x0) * esc, (PLANO.z1 - PLANO.z0) * esc);
     const E = PLANO.escalera;
     ctx.fillStyle = '#2b3a57'; ctx.fillRect(X(E.x0), Y(E.z0), (E.x1 - E.x0) * esc, (E.z1 - E.z0) * esc);
+    // salas de la UP (sin asientos monitoreados)
+    ctx.fillStyle = '#334155';
+    for (const k of ['sala3', 'salasEstudio', 'computadoras', 'hemeroteca', 'diarios']) { const o = PLANO[k]; if (o.piso === piso) ctx.fillRect(X(o.x0), Y(o.z0), (o.x1 - o.x0) * esc, (o.z1 - o.z0) * esc); }
     for (const m of PLANO.mesas) if (m.piso === piso) { ctx.fillStyle = m.asientos[0].piloto ? '#a3863c' : '#6b5039'; ctx.fillRect(X(m.x - 1.2), Y(m.z - 0.5), 2.4 * esc, esc); }
     for (const a of b.asientos) {
       if (a.piso !== piso) continue;

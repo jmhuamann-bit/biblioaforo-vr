@@ -19,7 +19,7 @@ export const EXPERIENCIAS = [
     puntos: ['Cruza las puertas y sienta siluetas', 'Monitor Serie en vivo', 'Luz, cámara movida y calibración'] },
   { id: 'libre', icono: '🧭', nombre: 'Libre', tecla: '5',
     texto: 'Recorre la biblioteca a tu ritmo y descubre cómo funciona cada pieza del sistema.',
-    puntos: ['10 puntos de interés', 'Vista aérea cuando quieras', 'Sin reloj ni prisa'] },
+    puntos: ['12 puntos de interés', 'Vista aérea cuando quieras', 'Sin reloj ni prisa'] },
 ];
 
 export class Menu {

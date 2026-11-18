@@ -33,6 +33,31 @@ export const PLANO = {
   ],
   mostrador: { piso: 1, x0: 9.5, x1: 15.5, z0: 9.2, z1: 10.4 },
   ventanas: { derecha: true, frente: true },
+  // Espacios de la UP (reglamento y guía de la Biblioteca): Sala 3 de materiales especiales (acceso
+  // restringido), salas de estudio grupales (se reservan en línea; no tienen cámara ni cuentan entre
+  // los 332 asientos), computadoras para bases de datos, hemeroteca y diarios en la entrada.
+  sala3: { piso: 1, x0: 16.6, x1: 22.75, z0: 7.0, z1: 12.9 },
+  salasEstudio: { piso: 1, x0: 18.6, x1: 22.75, z0: -12.9, z1: 3.4, n: 4 },
+  computadoras: { piso: 1, x0: -17.6, x1: -15.4, z0: -9.0, z1: -2.5 },
+  hemeroteca: { piso: 2, x0: -19.3, x1: -17.9, z0: -10.0, z1: 1.5 },
+  diarios: { piso: 1, x0: 2.35, x1: 3.65, z0: 11.7, z1: 12.7 },
+};
+
+// Galería del Pabellón C (así se entra a la biblioteca de la UP): pasillo techado frente a la vitrina,
+// con una fila de columnas redondas, el ala de enfrente (aula con vidrio) y dos pasajes al campus.
+// Por aquí llegan y se van los estudiantes.
+PLANO.galeria = {
+  z0: PLANO.z1, z1: PLANO.z1 + 11,           // del vidrio de la biblioteca al ala de enfrente
+  x0: -26, x1: 44,                            // muro con cajeros a la izquierda · abierta a la derecha
+  zColumnas: PLANO.z1 + 3.2, radioColumna: 0.36,
+  columnas: [-25, -18, -11, -4, 10, 17, 24, 31, 38],
+  zEje: PLANO.z1 + 6,                         // eje por donde se camina
+  pasajes: [{ x0: -20.5, x1: -16.5 }, { x0: 14.8, x1: 18.8 }],
+  profundidadAla: 7,
+  alturaMarquesina: 3.4, alturaTecho: 9.0,
+  // maceteros junto al vidrio del ala de enfrente y objetos junto a las columnas (obstáculos al caminar)
+  maceteros: [-14, -9.5, -5, 3, 7.5, 12, 25, 29.5, 34].map((x) => ({ x0: x - 0.5, x1: x + 0.5, z0: PLANO.z1 + 10.3, z1: PLANO.z1 + 10.8 })),
+  objetos: [{ x: -3.05, z: PLANO.z1 + 2.55, r: 0.45 }, { x: -5.0, z: PLANO.z1 + 2.7, r: 0.25 }, { x: 9.0, z: PLANO.z1 + 2.6, r: 0.4 }, { x: 11.0, z: PLANO.z1 + 2.8, r: 0.25 }],
 };
 
 const LETRAS = ['A', 'B', 'C', 'D'];
@@ -112,6 +137,11 @@ function rectsObstaculos(piso, radio) {
   if (piso === 1) {
     const M = PLANO.mostrador; add(M.x0, M.x1, M.z0, M.z1);
     add(PLANO.totem.x - 0.4, PLANO.totem.x + 0.4, PLANO.totem.z - 0.3, PLANO.totem.z + 0.3);
+  }
+  // salas cerradas, computadoras, hemeroteca y diarios
+  for (const k of ['sala3', 'salasEstudio', 'computadoras', 'hemeroteca', 'diarios']) {
+    const o = PLANO[k];
+    if (o.piso === piso) add(o.x0, o.x1, o.z0, o.z1);
   }
   return r;
 }
@@ -397,13 +427,64 @@ function indicaciones(pts, desde, hasta, asiento) {
 
 // Puntos de referencia del recorrido
 export const PUNTOS = {
-  plaza: { x: 0.5, z: 22, piso: 1 },
+  plaza: { x: 0.5, z: PLANO.galeria.zEje + 2, piso: 1 },          // en la galería, frente a la entrada
   entrada: { x: 0.5, z: 12.2, piso: 1 },
   vestibulo: { x: 0.5, z: 9.4, piso: 1 },
   salidaInterior: { x: 5.5, z: 12.4, piso: 1, nombre: 'Sal por la puerta de salida' },
-  salidaExterior: { x: 5.5, z: 17.5, piso: 1 },
+  salidaExterior: { x: 5.5, z: PLANO.z1 + 4.5, piso: 1 },
   llegadaPiso2: { x: PLANO.escalera.portal2.x, z: PLANO.escalera.portal2.z, piso: 2 },
 };
+
+// ---------------------------------------------------------------------
+// Galería: por dónde se camina afuera, de dónde llegan y por dónde se van los estudiantes
+// ---------------------------------------------------------------------
+// ¿Se puede pisar (x, z) en la galería (o en un pasaje al campus)? Las puertas las revisa quien llama.
+export function transitableGaleria(x, z) {
+  const G = PLANO.galeria;
+  if (z >= G.z1 - 0.3) return z < G.z1 + G.profundidadAla + 4 && G.pasajes.some((p) => x > p.x0 + 0.35 && x < p.x1 - 0.35);
+  if (x < G.x0 + 0.35 || x > G.x1 + 6) return false;
+  for (const cx of G.columnas) if (Math.hypot(x - cx, z - G.zColumnas) < G.radioColumna + 0.28) return false;
+  for (const o of G.objetos) if (Math.hypot(x - o.x, z - o.z) < o.r + 0.2) return false;
+  for (const m of G.maceteros) if (x > m.x0 - 0.25 && x < m.x1 + 0.25 && z > m.z0 - 0.25) return false;
+  return true;
+}
+
+// Punto del campus por donde aparece alguien que llega: uno de los dos pasajes o el extremo abierto
+export function origenCampus(azar = Math.random) {
+  const G = PLANO.galeria;
+  const k = azar();
+  if (k < 0.82) {
+    const p = G.pasajes[k < 0.38 ? 0 : 1];
+    return { x: (p.x0 + p.x1) / 2 + (azar() - 0.5) * 2, z: G.z1 + 1.6 + azar() * 2 };   // dentro del pasaje, casi sin verse
+  }
+  return { x: G.x1 + 2 + azar() * 4, z: G.zEje + (azar() - 0.5) * 2.4 };
+}
+
+// Camino por la galería desde donde estés hasta frente a una puerta (sin atravesar columnas)
+export function caminoGaleria(desde, xPuerta) {
+  const G = PLANO.galeria;
+  const pts = [{ x: desde.x, y: 0, z: desde.z }];
+  if (desde.z > G.z1 - 0.3) pts.push({ x: desde.x, y: 0, z: G.zEje + (Math.random() - 0.5) * 1.2 });   // sale del pasaje
+  if (Math.abs(desde.x - xPuerta) > 1.5) {
+    const z = desde.z > G.zColumnas - 0.6 ? Math.min(Math.max(desde.z, G.zColumnas + 1.2), G.zEje + 1) : Math.max(PLANO.z1 + 1.2, Math.min(desde.z, G.zColumnas - 0.7));
+    pts.push({ x: xPuerta + (Math.random() - 0.5) * 0.8, y: 0, z });
+  }
+  return pts;
+}
+
+// De la puerta de salida (afuera) a uno de los pasajes o al extremo abierto, por el eje de la galería
+export function caminoAlCampus(desde) {
+  const G = PLANO.galeria;
+  const pts = [];
+  if (desde.z < G.zEje - 1.5) pts.push({ x: desde.x + (Math.random() - 0.5) * 1.6, y: 0, z: G.zEje + (Math.random() - 0.5) * 1.2 });
+  const k = Math.random();
+  if (k < 0.82) {
+    const p = G.pasajes[k < 0.41 ? 0 : 1];
+    const x = (p.x0 + p.x1) / 2 + (Math.random() - 0.5) * 1.6;
+    pts.push({ x, y: 0, z: G.zEje + (Math.random() - 0.5) * 1.2 }, { x, y: 0, z: G.z1 + 5 + Math.random() * 2 });
+  } else pts.push({ x: G.x1 + 3 + Math.random() * 4, y: 0, z: G.zEje + (Math.random() - 0.5) * 2 });
+  return pts;
+}
 
 // ---------------------------------------------------------------------
 // Rutas rápidas para muchos estudiantes a la vez: campos de distancia (Dijkstra) con "padres"
@@ -482,7 +563,7 @@ export function rutaLlegada(destino, asiento = null) {
   return limpiar(pts);
 }
 
-// De cualquier punto {x, z, piso} a la plaza, saliendo por la puerta de salida
+// De cualquier punto {x, z, piso} al campus, saliendo por la puerta de salida y por la galería
 export function rutaSalida(desde) {
   const xS = (PLANO.puertas.salida.x0 + PLANO.puertas.salida.x1) / 2;
   let pts = [];
@@ -495,7 +576,7 @@ export function rutaSalida(desde) {
   } else {
     pts.push(...conAltura(campoRuta('salida').camino(desde.x, desde.z), 1));
   }
-  pts.push({ x: xS, y: 0, z: PLANO.z1 + 1.2 }, { x: xS + (Math.random() - 0.5) * 6, y: 0, z: PLANO.z1 + 12 + Math.random() * 6 });
+  pts.push({ x: xS, y: 0, z: PLANO.z1 + 1.2 }, ...caminoAlCampus({ x: xS, z: PLANO.z1 + 1.2 }));
   return limpiar(pts);
 }
 
@@ -509,16 +590,24 @@ function limpiar(pts) {
 }
 
 // Lugares para esperar de pie (vestíbulo) y para mirar libros (frente a los estantes)
-export const ESPERA = [[-6, 8.6], [-2, 7.7], [3.5, 8.2], [8, 7.9], [12.5, 8.4], [-9.5, 11.6], [17.5, 11.4], [-13, 8.2]]
+export const ESPERA = [[-6, 8.6], [-2, 7.7], [3.5, 8.2], [8, 7.9], [12.5, 8.4], [-9.5, 11.6], [15.6, 11.9], [-13, 8.2]]
   .map(([x, z]) => ({ x, z, piso: 1 }));
 export const ESTANTES_FRENTE = [
   ...[-10, -7, -4, -1, 2].map((z) => ({ x: -21.1, z, piso: 1 })),
   ...[-3, 2, 7, 12, 16].map((x) => ({ x, z: -11.75, piso: 1 })),
   ...[-10, -6, -2, 2].map((z) => ({ x: -21.1, z, piso: 2 })),
 ];
-// Fila afuera de la entrada cuando el aforo está completo
+// Fila afuera de la entrada cuando el aforo está completo: frente a la puerta y luego a lo largo
+// de la galería (hacia los cajeros); si llega al muro, vuelve en una segunda hilera.
 export function puestoCola(k) {
-  return { x: 0.5 + (k % 2 ? 0.35 : -0.35), y: 0, z: PLANO.z1 + 1.6 + k * 0.72 };
+  const G = PLANO.galeria;
+  if (k < 5) return { x: 0.5 + (k % 2 ? 0.35 : -0.35), y: 0, z: PLANO.z1 + 1.6 + k * 0.72 };
+  const j = k - 5;
+  const largo = Math.floor((0.5 - 1.3 - (G.x0 + 1.5)) / 0.72);
+  const ida = j < largo;
+  const i = ida ? j : Math.min(j - largo, largo * 2);
+  const x = ida ? 0.5 - 1.3 - i * 0.72 : G.x0 + 1.5 + i * 0.72;
+  return { x, y: 0, z: G.zEje + (ida ? -0.3 : 1.3) + (j % 2 ? 0.25 : -0.25) };
 }
 
 // ¿Está (x, z) sobre la escalera, entre dos pisos? (ahí las rutas no se recalculan)
