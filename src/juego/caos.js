@@ -97,9 +97,8 @@ export class Caos {
     this.esc.restaurarVisibilidad(); this.esc.enfocarPiso(null); this.esc.separarPisos(true);
     this.b3d.ocultarRuta(); this.b3d.marcarDestino(null); this.b3d.avatar.visible = false;
     const v = this.esc.vistas().casa;
-    this.app.control.usarOrbita({ pos: [24, 30, 38], obj: [-0.5, 5.5, 1], min: 6, max: 140, polarMax: Math.PI * 0.47, animar });
+    this.app.control.usarOrbita({ pos: v.pos, obj: v.obj, min: 6, max: 140, polarMax: Math.PI * 0.47, animar });
     H.mostrar({ objetivo: true, kpis: false, minimapa: false, barraAcciones: true });
-    void v;
   }
 
   alternarCaminar() {
@@ -196,7 +195,7 @@ export class Caos {
   #enfocarMesa(id) {
     const mesa = PLANO.mesas.find((x) => x.id === id);
     if (!mesa || this.caminando) return;
-    const y = yPiso(mesa.piso) + (mesa.piso === 2 ? this.b3d.explosion : 0);
+    const y = yPiso(mesa.piso) + this.b3d.alzado(mesa.piso);
     this.app.control.irA([mesa.x + 6, y + 9, mesa.z + 9], [mesa.x, y, mesa.z], 1.2);
   }
 
@@ -225,7 +224,7 @@ export class Caos {
   alClic(h) {
     if (!h) return;
     const m = this.m, b = this.b, b3d = this.b3d;
-    const flot = (txt, a, color) => b3d.flotante(txt, a.x, yPiso(a.piso) + (a.piso === 2 ? b3d.explosion : 0) + 1.6, a.z, color, { escala: 0.75 });
+    const flot = (txt, a, color) => b3d.flotante(txt, a.x, yPiso(a.piso) + b3d.alzado(a.piso) + 1.6, a.z, color, { escala: 0.75 });
     if (h.tipo === 'puerta') {
       if (h.id === 'entrada') { m.entran(5, { escalonado: 0.35 }); H.banner('Llegan 5 personas', 'info', 'Míralas cruzar la puerta: el sensor S1 suma una por una.', 2400); }
       else { m.salen(5); H.banner('Se van 5 personas', 'info', 'Al cruzar la salida, el sensor S2 resta una por una.', 2400); }
@@ -347,7 +346,7 @@ export class Caos {
                   <div><span>Personas dentro <em>sensores de las puertas</em></span><b><span data-v="dentro"></span><small> / ${PLANO.aforo}</small></b><div class="barra-caos"><i data-v="bDentro"></i></div></div>
                   <div><span>Asientos ocupados <em>cámaras de las mesas</em></span><b><span data-v="ocupados"></span><small> / ${b.total()}</small></b><div class="barra-caos rojo"><i data-v="bOcup"></i></div></div>
                 </div>
-                <div class="fila-datos"><span>Libres piso 1 <b data-v="l1"></b></span><span>Libres piso 2 <b data-v="l2"></b></span><span>Caminando <b data-v="cam"></b></span><span>En la fila <b data-v="cola"></b></span><span>Cámaras caídas <b data-v="caidas"></b></span></div>
+                <div class="fila-datos"><span>Libres piso 1 <b data-v="l1"></b></span><span>Libres sótano <b data-v="l2"></b></span><span>Caminando <b data-v="cam"></b></span><span>En la fila <b data-v="cola"></b></span><span>Cámaras caídas <b data-v="caidas"></b></span></div>
                 <div class="entorno-chip" data-v="entorno"></div>
               </div>
               <div class="tarjeta">

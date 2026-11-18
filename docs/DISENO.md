@@ -4,7 +4,7 @@
 
 La biblioteca es un **mundo vivo**: estudiantes virtuales llegan desde la plaza, cruzan la puerta (el sensor S1 los cuenta), buscan asiento, caminan hasta él, se sientan (la cámara de su mesa lo confirma en 0,9 s), estudian un rato, se van por la puerta de salida (el sensor S2 los descuenta). Todo lo que el usuario hace entra en ese mundo y tiene consecuencias visibles: si ordena que entren diez personas, las ve cruzar la puerta, repartirse por los pisos y cambiar los indicadores; si elige un asiento y un estudiante virtual llega antes, el sistema reacciona y le propone otra ruta.
 
-Pilares: **explorar** (primera persona en los dos pisos), **manipular** (asientos, puertas, sensores, cámaras), **decidir** (qué asiento, qué ruta, qué evento provocar), **provocar eventos** y **ver consecuencias en tiempo real** (personas, colores, tótem, mapa, sonidos, indicadores).
+Pilares: **explorar** (primera persona en el piso 1 y el sótano), **manipular** (asientos, puertas, sensores, cámaras), **decidir** (qué asiento, qué ruta, qué evento provocar), **provocar eventos** y **ver consecuencias en tiempo real** (personas, colores, tótem, mapa, sonidos, indicadores).
 
 ## 2. Las cinco experiencias
 
@@ -14,13 +14,13 @@ Pilares: **explorar** (primera persona en los dos pisos), **manipular** (asiento
 | **Caos** | Controlar la biblioteca y llevarla al límite | Panel de control: entradas, salidas, llegada masiva, ocupar o liberar mesas con clic, mochilas, fallas de cámara, corte en una sala, evacuación, hora y velocidad | Ver cómo reacciona el sistema: estados del entorno, colas en la puerta, alertas y registro |
 | **Detective** | Resolver misiones con condiciones | Leer la misión → inspeccionar asientos (zona, enchufe, ventana, mesa) → marcar candidatos → comparar → confirmar | Condiciones cumplidas y qué tan cerca estuvo de la mejor opción; estrellas por misión |
 | **Ingeniería** | Entender y manipular el prototipo | Maqueta con sensores: cruzar las puertas, sentar o quitar siluetas en A1–A4, cambiar la luz, mover y recalibrar la cámara, ver el Monitor Serie en vivo | El sistema responde como el firmware real: LCD, LED, cámara, líneas CSV |
-| **Libre** | Recorrer y descubrir | Caminar por los dos pisos, abrir puntos de interés, inspeccionar objetos, cambiar a vista aérea | Puntos descubiertos (n de 10) |
+| **Libre** | Recorrer y descubrir | Caminar por el piso 1 y el sótano, abrir puntos de interés, inspeccionar objetos, cambiar a vista aérea | Puntos descubiertos (n de 12) |
 
 ## 3. Mecánicas
 
-- **Primera persona** con teclado y ratón (W A S D, ratón para mirar, Shift para correr), en los dos pisos y la escalera; en el visor, sticks y teletransporte.
+- **Primera persona** con teclado y ratón (W A S D, ratón para mirar, Shift para correr), en el piso 1, la escalera y el sótano; en el visor, sticks y teletransporte.
 - **Mira e interacción contextual**: lo que está al centro de la pantalla se resalta y muestra qué se puede hacer (`E` o clic): elegir un asiento, ver una mesa, leer el tótem, inspeccionar una cámara, un sensor, un estudiante.
-- **Estudiantes animados** que caminan (piernas y balanceo), cruzan puertas, suben la escalera, se sientan y se van; hacen cola afuera si el aforo está completo.
+- **Estudiantes animados** que caminan (piernas y balanceo), cruzan puertas, bajan al sótano por la escalera, se sientan y se van; hacen cola afuera si el aforo está completo.
 - **Asientos y mesas con estado dinámico**: verde libre, rojo ocupado, ámbar apartado con un objeto, gris sin señal de cámara, azul el tuyo.
 - **Rutas que se recalculan** al moverte o cuando cambia la disponibilidad; si alguien ocupa tu asiento, se ofrece el libre más cercano.
 - **Rivales**: en hora punta, a veces un estudiante va hacia tu asiento; se marca en rojo y puedes correr para ganarle.

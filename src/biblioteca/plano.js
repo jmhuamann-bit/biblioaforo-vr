@@ -1,12 +1,13 @@
 // Plano de la biblioteca (distribución referencial con las cifras del informe):
-// Sala 1 (piso 1): 24 mesas · 96 asientos · vestíbulo con entrada, salida y tótem.
-// Sala 2 (piso 2): 59 mesas · 236 asientos · zona de silencio y de trabajo en grupo.
+// Sala 1 (piso 1, a nivel de la galería): 24 mesas · 96 asientos · vestíbulo con entrada, salida y tótem.
+// Sala 2 (sótano, como en la UP): 59 mesas · 236 asientos · zona de silencio y de trabajo en grupo.
+// En el código, «piso 2» es el sótano: yPiso(2) es negativo.
 // Unidades: metros. x a la derecha, z hacia la fachada (puertas en +z), y hacia arriba.
 // No depende de three.js: lo usan el 3D, el mapa 2D, las rutas y las pruebas.
 
 export const PLANO = {
   x0: -23, x1: 23, z0: -13.25, z1: 13.25,
-  alturaPiso: 4.5,          // de piso a piso
+  alturaPiso: 4.5,          // de piso a piso (el sótano está 4,5 m por debajo del piso 1)
   alturaSala: 3.9,          // altura libre de cada sala
   mesa: { ancho: 2.4, fondo: 1.0, alto: 0.75 },
   silla: { dx: 0.6, dz: 0.9 },
@@ -17,14 +18,15 @@ export const PLANO = {
   },
   totem: { x: -3.2, z: 10.4 },
   vestibuloZ: 6.75,         // en el piso 1, z > 6.75 es vestíbulo
-  // Escalera en U en la esquina frontal izquierda (dos tramos de 2.25 m de altura)
+  // Escalera en U en la esquina frontal izquierda que BAJA al sótano (dos tramos de 2.25 m):
+  // en cada tramo, zAbajo es el extremo que queda del lado del piso 1 y zArriba el del lado del sótano.
   escalera: {
     x0: -22.6, x1: -16.4, z0: 5.6, z1: 12.4,
     tramo1: { x0: -22.4, x1: -20.2, zAbajo: 12.4, zArriba: 8.2 },
     rellano: { x0: -22.4, x1: -16.6, z0: 5.8, z1: 8.2 },
     tramo2: { x0: -18.8, x1: -16.6, zAbajo: 8.2, zArriba: 12.4 },
-    portal1: { x: -21.3, z: 12.85 },   // pie de la escalera (piso 1)
-    portal2: { x: -17.7, z: 12.85 },   // llegada (piso 2)
+    portal1: { x: -21.3, z: 12.85 },   // boca de la escalera en el piso 1
+    portal2: { x: -17.7, z: 12.85 },   // llegada al sótano
   },
   estantes: [
     { piso: 1, x0: -22.7, x1: -21.9, z0: -12.6, z1: 4.6 },
@@ -98,7 +100,7 @@ function crearSalas() {
     if (f === 5 && c === 0) continue;
     n++;
     agregar(2, n, f, c, -14.25 + c * 3.75, -10.5 + f * 3.9, {
-      zona: c < 5 ? 'silencio' : 'grupo', ventana: c === 9, enchufe: c % 2 === 1,
+      zona: c < 5 ? 'silencio' : 'grupo', ventana: false, enchufe: c % 2 === 1,   // bajo tierra: sin ventanas
     });
   }
   return { mesas, asientos };
@@ -109,7 +111,23 @@ PLANO.mesas = SALAS.mesas;
 PLANO.asientos = SALAS.asientos;
 PLANO.mesaPiloto = SALAS.mesas.find((m) => m.id === '1-01');
 export const NOMBRE_ZONA = { general: 'Sala general', piloto: 'Mesa piloto', silencio: 'Zona de silencio', grupo: 'Trabajo en grupo' };
-export const yPiso = (piso) => (piso - 1) * PLANO.alturaPiso;
+export const yPiso = (piso) => (piso === 2 ? -PLANO.alturaPiso : 0);
+// Nombres de los niveles para los textos ("piso 1", "sótano")
+export const NIVEL = { 1: 'piso 1', 2: 'sótano' };
+export const nivelDe = (piso) => NIVEL[piso] || `piso ${piso}`;
+export const NivelDe = (piso) => { const t = nivelDe(piso); return t[0].toUpperCase() + t.slice(1); };
+// En qué nivel está alguien según la altura de sus pies (en la escalera conserva el que tenía)
+// Casa de muñecas: qué fracción del alzado lleva lo que está en (x, y, z). El piso 1 se levanta y deja ver el
+// sótano: dentro del edificio, 1 en el piso 1, 0 en el sótano y en proporción en la escalera; afuera (galería), 0.
+export function fraccionAlzada(x, y, z) {
+  if (x < PLANO.x0 || x > PLANO.x1 || z < PLANO.z0 || z > PLANO.z1) return 0;
+  return Math.min(1, Math.max(0, (y - yPiso(2)) / (yPiso(1) - yPiso(2))));
+}
+export function nivelPorAltura(y, actual = 1) {
+  if (Math.abs(y - yPiso(2)) < 1.1) return 2;
+  if (Math.abs(y - yPiso(1)) < 1.1) return 1;
+  return actual;
+}
 
 // Punto de acceso a una silla (en el pasillo, frente al respaldo) y la silla misma
 export function accesoAsiento(a) {
@@ -328,9 +346,9 @@ function suavizar(pts, g) {
   return out;
 }
 
-// Recorrido por la escalera (de un piso a otro), con alturas
-function tramoEscalera(subiendo) {
-  const E = PLANO.escalera, h = PLANO.alturaPiso;
+// Recorrido por la escalera, con alturas: alSotano = del piso 1 al sótano (o al revés)
+function tramoEscalera(alSotano) {
+  const E = PLANO.escalera, h = yPiso(2);          // negativo: la escalera baja
   const x1 = (E.tramo1.x0 + E.tramo1.x1) / 2, x2 = (E.tramo2.x0 + E.tramo2.x1) / 2;
   const zr = (E.rellano.z0 + E.rellano.z1) / 2;
   const pts = [
@@ -343,17 +361,17 @@ function tramoEscalera(subiendo) {
     { x: x2, y: h, z: E.tramo2.zArriba },
     { x: E.portal2.x, y: h, z: E.portal2.z },
   ];
-  return subiendo ? pts : pts.reverse();
+  return alSotano ? pts : pts.reverse();
 }
 
-// Altura del suelo en (x, z) para quien camina; nivel: 1 o 2 (el piso donde está)
+// Altura del suelo en (x, z) para quien camina; nivel: 1 o 2 (piso 1 o sótano)
 export function alturaSuelo(x, z, nivel = 1) {
-  const E = PLANO.escalera, h = PLANO.alturaPiso;
+  const E = PLANO.escalera, h = yPiso(2);          // negativo: la escalera baja
   const dentro = (r) => x >= r.x0 && x <= r.x1;
   if (z >= E.tramo1.zArriba && z <= E.tramo1.zAbajo && dentro(E.tramo1)) return ((E.tramo1.zAbajo - z) / (E.tramo1.zAbajo - E.tramo1.zArriba)) * h / 2;
   if (z >= E.rellano.z0 && z <= E.rellano.z1 && dentro(E.rellano)) return h / 2;
   if (z >= E.tramo2.zAbajo && z <= E.tramo2.zArriba && dentro(E.tramo2)) return h / 2 + ((z - E.tramo2.zAbajo) / (E.tramo2.zArriba - E.tramo2.zAbajo)) * h / 2;
-  return nivel >= 2 ? h : 0;
+  return yPiso(nivel >= 2 ? 2 : 1);
 }
 
 // ¿Se puede pisar (x, z) estando en el nivel dado? (incluye la escalera)
@@ -372,16 +390,16 @@ export function ruta(desde, hasta, { asiento = null } = {}) {
   if (desde.piso === hasta.piso) {
     pts = conY(aEstrella(desde.piso, desde.x, desde.z, destino.x, destino.z), desde.piso);
   } else {
-    const subir = hasta.piso > desde.piso;
-    const pA = subir ? PLANO.escalera.portal1 : PLANO.escalera.portal2;
-    const pB = subir ? PLANO.escalera.portal2 : PLANO.escalera.portal1;
+    const alSotano = hasta.piso > desde.piso;
+    const pA = alSotano ? PLANO.escalera.portal1 : PLANO.escalera.portal2;
+    const pB = alSotano ? PLANO.escalera.portal2 : PLANO.escalera.portal1;
     if (Math.hypot(desde.x - pA.x, desde.z - pA.z) < 1.2) {
       // ya está al pie de la escalera: sin volver atrás al portal
-      pts = [{ x: desde.x, y: yPiso(desde.piso), z: desde.z }, ...tramoEscalera(subir).slice(1)];
+      pts = [{ x: desde.x, y: yPiso(desde.piso), z: desde.z }, ...tramoEscalera(alSotano).slice(1)];
     } else {
       pts = conY(aEstrella(desde.piso, desde.x, desde.z, pA.x, pA.z), desde.piso);
       pts.pop();
-      pts.push(...tramoEscalera(subir));
+      pts.push(...tramoEscalera(alSotano));
     }
     const resto = conY(aEstrella(hasta.piso, pB.x, pB.z, destino.x, destino.z), hasta.piso);
     pts.push(...resto.slice(1));
@@ -405,7 +423,7 @@ function indicaciones(pts, desde, hasta, asiento) {
     const a = pts[i - 1], b = pts[i];
     if (!escalera && Math.abs(b.y - a.y) > 0.5) {
       escalera = true;
-      out.push({ texto: b.y > a.y ? 'Sube por la escalera al piso 2' : 'Baja por la escalera al piso 1', en: largo[i - 1], i: i - 1 });
+      out.push({ texto: b.y < a.y ? 'Baja por la escalera al sótano' : 'Sube por la escalera al piso 1', en: largo[i - 1], i: i - 1 });
     }
     if (i >= pts.length - 2) continue;
     const c = pts[i + 1];
@@ -610,9 +628,9 @@ export function puestoCola(k) {
   return { x, y: 0, z: G.zEje + (ida ? -0.3 : 1.3) + (j % 2 ? 0.25 : -0.25) };
 }
 
-// ¿Está (x, z) sobre la escalera, entre dos pisos? (ahí las rutas no se recalculan)
+// ¿Está (x, z) sobre la escalera, entre el piso 1 y el sótano? (ahí las rutas no se recalculan)
 export function enEscalera(x, z, nivel = 1) {
   const E = PLANO.escalera;
   const y = alturaSuelo(x, z, nivel);
-  return x > E.x0 && x < E.x1 && z > E.z0 && z < E.z1 && y > 0.15 && y < PLANO.alturaPiso - 0.15;
+  return x > E.x0 && x < E.x1 && z > E.z0 && z < E.z1 && y < yPiso(1) - 0.15 && y > yPiso(2) + 0.15;
 }

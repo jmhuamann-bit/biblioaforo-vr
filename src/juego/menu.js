@@ -1,4 +1,4 @@
-// Menú de experiencias: la biblioteca viva gira de fondo (casa de muñecas con los dos pisos)
+// Menú de experiencias: la biblioteca viva gira de fondo (casa de muñecas: el piso 1 levantado sobre el sótano)
 // mientras se elige cómo vivirla.
 import { NOMBRE_ENTORNO } from '../biblioteca/agentes.js';
 
@@ -7,7 +7,7 @@ const $ = (s) => document.querySelector(s);
 export const EXPERIENCIAS = [
   { id: 'horaPunta', icono: '⏱️', nombre: 'Hora punta', tecla: '1', destacada: true, etiqueta: 'Empieza aquí',
     texto: 'Son las 13:55 y la biblioteca se llena. Entra, elige un asiento y llega antes que los demás.',
-    puntos: ['Primera persona en los dos pisos', 'Rivales que van a tu asiento', 'Rutas que cambian solas'] },
+    puntos: ['Primera persona en el piso 1 y el sótano', 'Rivales que van a tu asiento', 'Rutas que cambian solas'] },
   { id: 'caos', icono: '🌪️', nombre: 'Caos', tecla: '2',
     texto: 'Tú mandas: llegadas masivas, mochilas que apartan sitios, cámaras caídas, evacuación.',
     puntos: ['Clic sobre asientos, mesas y puertas', 'Fila afuera cuando se llena el aforo', '5 retos para llevarla al límite'] },
@@ -41,7 +41,7 @@ export class Menu {
     esc.restaurarVisibilidad(); esc.enfocarPiso(null); esc.separarPisos(true);
     esc.b3d.ocultarRuta(); esc.b3d.marcarDestino(null); esc.b3d.avatar.visible = false;
     esc.marcar({ tuyo: null, elegido: null });
-    app.control.usarOrbita({ pos: this.#pos(), obj: [0, 4.5, 0], min: 10, max: 160, animar: false });
+    app.control.usarOrbita({ pos: this.#pos(), obj: [0, 1.5, 0], min: 10, max: 160, animar: false });
     app.control.orbita.enabled = false;
     this.el.innerHTML = this.#html();
     this.el.hidden = false;
@@ -84,7 +84,7 @@ export class Menu {
         <span class="texto-extra">
           <span class="etiqueta-extra">Sección extra</span>
           <b>Simulación para presentación <kbd>6</kbd></b>
-          <small>Los dos pisos llenos: solo la mesa piloto tiene 2 sillas libres. Con el Meta Quest 3 caminas hacia el sensor S1 real; cuando te detecta, en el simulador también entras. Luego vas a la mesa y te sientas.</small>
+          <small>El piso 1 y el sótano llenos: solo la mesa piloto tiene 2 sillas libres. Con el Meta Quest 3 caminas hacia el sensor S1 real; cuando te detecta, en el simulador también entras. Luego vas a la mesa y te sientas.</small>
         </span>
         <span class="jugar">Abrir ▸</span>
       </button>
@@ -103,11 +103,11 @@ export class Menu {
   }
 
   alEntrarVR() { this.app.escenas.biblioteca.separarPisos(false); }
-  alSalirVR() { this.app.escenas.biblioteca.separarPisos(true); this.app.control.usarOrbita({ pos: this.#pos(), obj: [0, 4.5, 0], min: 10, max: 160, animar: false }); this.app.control.orbita.enabled = false; }
+  alSalirVR() { this.app.escenas.biblioteca.separarPisos(true); this.app.control.usarOrbita({ pos: this.#pos(), obj: [0, 1.5, 0], min: 10, max: 160, animar: false }); this.app.control.orbita.enabled = false; }
 
   update(dt) {
     this.ang += dt * 0.045;
-    if (!this.app.vr?.presentando) this.app.control.irA(this.#pos(), [0, 4.5, 0], 0);
+    if (!this.app.vr?.presentando) this.app.control.irA(this.#pos(), [0, 1.5, 0], 0);
     this.tVivo -= dt;
     if (this.tVivo <= 0) {
       this.tVivo = 0.5;

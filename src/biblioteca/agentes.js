@@ -1,9 +1,9 @@
 // Motor de la multitud: estudiantes virtuales que llegan, cruzan los sensores de las puertas,
-// caminan a su asiento (subiendo la escalera si hace falta), se sientan, estudian y se van.
+// caminan a su asiento (bajando al sótano si hace falta), se sientan, estudian y se van.
 // Lo que hacen pasa por los mismos indicadores del sistema:
 //   cruzar la puerta → sensor S1/S2 → personas dentro · sentarse → cámara de la mesa (0,9 s) → asiento ocupado
 import { Emisor } from '../datos/estado.js';
-import { PLANO, rutaLlegada, rutaSalida, rutaInterior, ESPERA, ESTANTES_FRENTE, puestoCola, yPiso, campoRuta, accesoAsiento, campoDistancias, origenCampus, caminoGaleria, caminoAlCampus } from './plano.js';
+import { PLANO, rutaLlegada, rutaSalida, rutaInterior, ESPERA, ESTANTES_FRENTE, puestoCola, yPiso, campoRuta, accesoAsiento, campoDistancias, origenCampus, caminoGaleria, caminoAlCampus, nivelPorAltura } from './plano.js';
 
 const CONFIRMACION_S = 0.9;              // 3 lecturas × 300 ms de la ESP32-CAM
 const PERTENENCIAS_MIN = 20;             // reglamento UP: a los 20 min, seguridad retira lo que se dejó en un sitio
@@ -448,7 +448,7 @@ export class Multitud extends Emisor {
     }
     // nadie adentro: uno nuevo que entra ahora mismo por la puerta
     const xP = (PLANO.puertas.entrada.x0 + PLANO.puertas.entrada.x1) / 2;
-    // (al piso 2: del vestíbulo, que es abierto, a la escalera casi en línea recta)
+    // (al sótano: del vestíbulo, que es abierto, a la escalera casi en línea recta)
     const dPuerta = 3 + (s.piso === 1
       ? campo.distancia(xP, PLANO.z1 - 0.8)
       : Math.hypot(xP - E.portal1.x, PLANO.z1 - E.portal1.z) * 1.1 + 12.5 + campo.distancia(portalAqui.x, portalAqui.z));
@@ -598,7 +598,7 @@ export class Multitud extends Emisor {
       let dr = r - ag.rumbo; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
       ag.rumbo += dr * Math.min(1, dt * 8);
     }
-    ag.piso = ag.y > 3.4 ? 2 : 1;
+    ag.piso = nivelPorAltura(ag.y, ag.piso);
     ag.caminando = ag.d < ag.total;
     if (ag.caminando) ag.fase += dt * ag.vel * velPaso * 5.2;
     // sensores de las puertas

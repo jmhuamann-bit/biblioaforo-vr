@@ -2,6 +2,16 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// Paso girado ±30° o ±60° (un poco más corto) que sí está libre, para rodear esquinas
+export function desvio(dx, dz, libre, x, z) {
+  for (const ang of [0.52, -0.52, 1.05, -1.05]) {
+    const cs = Math.cos(ang) * 0.8, sn = Math.sin(ang) * 0.8;
+    const ex = dx * cs - dz * sn, ez = dx * sn + dz * cs;
+    if (libre(x + ex, z + ez)) return [ex, ez];
+  }
+  return null;
+}
+
 const suave = (t) => t * t * (3 - 2 * t);
 
 export class ControlEscritorio {
@@ -130,6 +140,11 @@ export class ControlEscritorio {
       if (p.libre(c.x + dx, c.z + dz)) { c.x += dx; c.z += dz; }
       else if (p.libre(c.x + dx, c.z)) c.x += dx;
       else if (p.libre(c.x, c.z + dz)) c.z += dz;
+      else {
+        // en una esquina o un pasillo angosto: prueba girando un poco el paso (así no te quedas trabado)
+        const giro = desvio(dx, dz, p.libre, c.x, c.z);
+        if (giro) { c.x += giro[0]; c.z += giro[1]; }
+      }
       p.fase = (p.fase || 0) + v / (p.ojos * 0.45);
     }
     const balanceo = (f || s) ? Math.sin((p.fase || 0) * 2) * p.ojos * 0.006 : 0;

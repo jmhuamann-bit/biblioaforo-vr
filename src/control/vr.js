@@ -9,8 +9,9 @@ import { Panel3D, dibujarGlifo } from './panel3d.js';
 import { dibujarTablero } from '../ui/tablero.js';
 import { FUENTE, rectRedondo } from '../motor/textos.js';
 import { MAQUETA as M } from '../config.js';
-import { PLANO, yPiso } from '../biblioteca/plano.js';
+import { PLANO, yPiso, nivelPorAltura, nivelDe, NivelDe } from '../biblioteca/plano.js';
 import { alBanner } from '../juego/hudJuego.js';
+import { desvio } from './escritorio.js';
 
 const ARRIBA = new THREE.Vector3(0, 1, 0);
 const zonaMuerta = (v, z = 0.18) => (Math.abs(v) < z ? 0 : (v - Math.sign(v) * z) / (1 - z));
@@ -167,7 +168,7 @@ export class ControlVR {
     const yRig = this.sinPiso ? y + (1.6 - cab.y) * escala : y;
     this.rig.position.set(x - off.x, yRig, z - off.z);
     this.rig.updateMatrixWorld(true);
-    if (this.enBiblioteca) this.nivel = y > 3.4 ? 2 : 1;
+    if (this.enBiblioteca) this.nivel = nivelPorAltura(y, this.nivel);
   }
 
   posicionCabeza(v = new THREE.Vector3()) { return this.camara.getWorldPosition(v); }
@@ -448,7 +449,7 @@ export class ControlVR {
       if (app.modo !== 'menu') this.#botonesMapa(p, W, H - 270);
       fila(H - 240, [
         { id: 'menu', texto: 'Experiencias', fn: () => app.irModo('menu'), activo: app.modo === 'menu' },
-        { id: 'pisoMapa', texto: `Mapa: piso ${this.pisoMapa}`, fn: () => { this.pisoMapa = this.pisoMapa === 1 ? 2 : 1; this.refrescar(); }, glifo: 'X', deshabilitado: app.modo === 'menu' },
+        { id: 'pisoMapa', texto: `Mapa: ${nivelDe(this.pisoMapa)}`, fn: () => { this.pisoMapa = this.pisoMapa === 1 ? 2 : 1; this.refrescar(); }, glifo: 'X', deshabilitado: app.modo === 'menu' },
         { id: 'sim', texto: sim ? 'Simulando ✓' : 'Datos reales', fn: () => app.alternarSimulacion(), activo: sim },
         { id: 'salir', texto: 'Salir del visor', fn: () => this.salir(), acento: '#f87171' },
       ]);
@@ -525,7 +526,7 @@ export class ControlVR {
       ctx.restore();
     }
     ctx.fillStyle = '#4ade80'; ctx.font = `700 30px ${FUENTE}`; ctx.textAlign = 'right';
-    ctx.fillText(`Piso ${piso}: ${b.libres(piso)} libres · gatillo sobre un asiento`, w - 34, 160);
+    ctx.fillText(`${NivelDe(piso)}: ${b.libres(piso)} libres · gatillo sobre un asiento`, w - 34, 160);
   }
 
   #dibujarTablero(ctx, w, h) {
@@ -556,7 +557,7 @@ export class ControlVR {
     ctx.fillText(this.modo === 'ar' ? 'Mira tu mesa y aprieta el gatillo para colocar la maqueta' : 'Aprieta el gatillo para empezar', w / 2, 142);
     const izq = [
       ['stick', 'Stick: caminar'],
-      ['X', lib ? 'Piso del mapa del tablero' : 'Entra una persona (simulación)'],
+      ['X', lib ? 'Nivel del mapa (piso 1 o sótano)' : 'Entra una persona (simulación)'],
       ['Y', 'Mostrar u ocultar esta ayuda'],
       ['agarre', lib ? 'Pulsar el stick: volver al inicio' : 'Agarre: tomar y girar la maqueta'],
     ];
@@ -615,7 +616,7 @@ export class ControlVR {
         const textoA = lib ? (this.app.modoActual?.textoA?.() || '—') : (this.escala === 'humana' ? 'Volver a la mesa' : 'Entrar 1:17');
         const items = der
           ? [['A', textoA], ['B', 'Tablero'], ['stick', '←→ girar · ↑ saltar']]
-          : [['X', lib ? 'Piso del mapa' : 'Entra una persona'], ['Y', 'Ayuda'], ['stick', 'Caminar']];
+          : [['X', lib ? 'Piso 1 o sótano' : 'Entra una persona'], ['Y', 'Ayuda'], ['stick', 'Caminar']];
         items.forEach(([g, t], k) => {
           const y = 70 + k * 120;
           dibujarGlifo(ctx, g, 60, y, 64);
@@ -794,9 +795,10 @@ export class ControlVR {
       if (suelo.libre(cab.x + dx, cab.z + dz)) { this.rig.position.x += dx; this.rig.position.z += dz; }
       else if (suelo.libre(cab.x + dx, cab.z)) this.rig.position.x += dx;
       else if (suelo.libre(cab.x, cab.z + dz)) this.rig.position.z += dz;
+      else { const g = desvio(dx, dz, suelo.libre, cab.x, cab.z); if (g) { this.rig.position.x += g[0]; this.rig.position.z += g[1]; } }
       const yS = suelo.y(cab.x, cab.z);
       this.rig.position.y += (yS - this.rig.position.y) * Math.min(1, dt * 8);
-      if (this.enBiblioteca) { if (yS > 3.4) this.nivel = 2; else if (yS < 1.1) this.nivel = 1; }
+      if (this.enBiblioteca) this.nivel = nivelPorAltura(yS, this.nivel);
     }
     if (this.enBiblioteca) {
       const cab = this.posicionCabeza(this.tmpV);

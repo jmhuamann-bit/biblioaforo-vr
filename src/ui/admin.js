@@ -25,7 +25,7 @@ export function panelAdmin(app) {
           <h3>Ocupación por piso <small data-v="hora"></small></h3>
           <div class="barras-piso">
             <div><span><b>Piso 1 · Sala 1</b><span data-v="p1"></span></span><div class="b"><i data-v="b1"></i></div></div>
-            <div><span><b>Piso 2 · Sala 2</b><span data-v="p2"></span></span><div class="b"><i data-v="b2"></i></div></div>
+            <div><span><b>Sótano · Sala 2</b><span data-v="p2"></span></span><div class="b"><i data-v="b2"></i></div></div>
           </div>
         </div>
         <div class="tarjeta">
@@ -150,7 +150,7 @@ export function dispositivos(ul, caja, app) {
 export function descargarTodo(app) {
   const b = app.biblio;
   const sello = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-  const csv = ['hora_simulada,personas_dentro,asientos_ocupados,libres_piso1,libres_piso2']
+  const csv = ['hora_simulada,personas_dentro,asientos_ocupados,libres_piso1,libres_sotano']
     .concat(b.historial.map((p) => `${b.hora(p.min)},${p.dentro},${p.ocupados},${p.libres1 ?? ''},${p.libres2 ?? ''}`)).join('\n');
   descargar(`BiblioAforo_biblioteca_${sello}.csv`, csv + '\n', 'text/csv;charset=utf-8');
   const est = app.estado;

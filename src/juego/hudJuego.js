@@ -32,7 +32,7 @@ export function kpis(app) {
   const html = `<div>Personas dentro<b>${b.puertas.dentro}<small style="font-size:12px;color:#94a3b8"> / ${b.puertas.aforo}</small></b></div>
     <div>Hora<b>${b.hora()}</b></div>
     <div>Libres piso 1<b class="verde">${b.libres(1)}</b></div>
-    <div>Libres piso 2<b class="verde">${b.libres(2)}</b></div>
+    <div>Libres sótano<b class="verde">${b.libres(2)}</b></div>
     <span class="entorno ${r.entorno}">${NOMBRE_ENTORNO[r.entorno]}${r.cola ? ` · ${r.cola} en la fila` : ''}</span>`;
   const el = $('#kpis');
   if (el.dataset.h !== html) { el.innerHTML = html; el.dataset.h = html; }
@@ -98,7 +98,7 @@ export class Minimapa {
     const ox = (W - (PLANO.x1 - PLANO.x0) * esc) / 2, oy = 26;
     const X = (x) => ox + (x - PLANO.x0) * esc, Y = (z) => oy + (z - PLANO.z0) * esc;
     ctx.fillStyle = '#e2e8f0'; ctx.font = '700 13px "Segoe UI", sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText(`Piso ${piso} · Sala ${piso}`, 10, 16);
+    ctx.fillText(piso === 1 ? 'Piso 1 · Sala 1' : 'Sótano · Sala 2', 10, 16);
     ctx.textAlign = 'right'; ctx.fillStyle = '#4ade80';
     ctx.fillText(`${b.libres(piso)} libres`, W - 10, 16);
     if (piso === 1) {
@@ -127,7 +127,7 @@ export class Minimapa {
     if (ruta) {
       ctx.strokeStyle = '#5eead4'; ctx.lineWidth = 2.5; ctx.beginPath();
       let primero = true;
-      for (const p of ruta) { const enPiso = piso === 1 ? p.y < 2.3 : p.y > 2.2; if (!enPiso) { primero = true; continue; } if (primero) { ctx.moveTo(X(p.x), Y(p.z)); primero = false; } else ctx.lineTo(X(p.x), Y(p.z)); }
+      for (const p of ruta) { const enPiso = piso === 1 ? p.y > -2.3 : p.y < -2.2;   // el sótano está abajo if (!enPiso) { primero = true; continue; } if (primero) { ctx.moveTo(X(p.x), Y(p.z)); primero = false; } else ctx.lineTo(X(p.x), Y(p.z)); }
       ctx.stroke();
     }
     if (objetivo && objetivo.piso === piso) { ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(X(objetivo.x), Y(objetivo.z), 5.5, 0, Math.PI * 2); ctx.stroke(); }

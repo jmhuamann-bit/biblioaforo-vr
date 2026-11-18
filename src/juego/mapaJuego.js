@@ -60,7 +60,7 @@ export class MapaJuego {
     const o = this.opc;
     $('#mapaBarra').innerHTML = `
       <b class="titulo-mapa">${o.titulo}</b>
-      <div class="grupo-botones">${[1, 2].map((p) => `<button data-piso="${p}" aria-pressed="${p === o.piso}">Piso ${p} · <span>${b.libres(p)}</span> libres</button>`).join('')}</div>
+      <div class="grupo-botones">${[1, 2].map((p) => `<button data-piso="${p}" aria-pressed="${p === o.piso}">${p === 1 ? 'Piso 1' : 'Sótano'} · <span>${b.libres(p)}</span> libres</button>`).join('')}</div>
       ${o.ayuda ? `<span class="ayuda-mapa">${o.ayuda}</span>` : ''}
       <div class="leyenda-mapa"><span class="l libre">Libre</span><span class="l ocupado">Ocupado</span><span class="l objeto">Apartado</span><span class="l tuyo">Tuyo / elegido</span><span class="l piloto">Mesa piloto</span></div>
       <button data-cerrar>Cerrar <kbd>Tab</kbd></button>`;

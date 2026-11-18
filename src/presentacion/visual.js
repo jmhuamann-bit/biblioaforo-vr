@@ -290,6 +290,6 @@ export class AyudasPresentacion {
     p.rotation.set(0, Math.atan2(cabeza.x - p.position.x, cabeza.z - p.position.z), 0);
   }
 
-  // altura del piso de un asiento (por si algún día la mesa elegida está en el piso 2)
+  // altura del piso de un asiento (por si algún día la mesa elegida está en el sótano)
   static yAsiento(a) { return yPiso(a.piso); }
 }

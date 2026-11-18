@@ -4,16 +4,17 @@
 //   · Sala 3 de materiales especiales (tesis, papers…), de acceso restringido: se pide en el módulo de atención
 //   · salas de estudio grupales (se reservan en línea): fuera del conteo de los 332 asientos
 //   · computadoras para consultar bases de datos (máximo 1 hora)
-//   · hemeroteca en la Sala 2 y carritos para dejar los libros consultados
+//   · hemeroteca en la Sala 2 (en el sótano) y carritos para dejar los libros consultados
 //   · aviso de normas: solo agua en envase cerrado, silencio y celular en silencio
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { PLANO } from '../biblioteca/plano.js';
+import { PLANO, yPiso } from '../biblioteca/plano.js';
 import * as TX from '../motor/texturas.js';
 import { rectRedondo } from '../motor/textos.js';   // solo para dibujar en lienzos
 import { caja, cajaL, fusionar, lienzoTex, cartel, texto } from './galeria.js';
 
 const H = PLANO.alturaPiso;
+const Y2 = yPiso(2);          // piso del sótano
 const Z1 = PLANO.z1;
 const AZUL = '#1f3a6d';
 
@@ -281,14 +282,14 @@ export function construirInteriorUP(b3d) {
   rotuloC.position.set(xm, 2.9, C.z1 + 0.2);
   p1.add(fusionar(escritorio, mats.blanco), fusionar(monitores, mats.oscuro), new THREE.Mesh(mergeGeometries(brillos), mats.pantalla), fusionar(sillasC, mats.silla), rotuloC);
 
-  // ---------------------------------------------------------------- hemeroteca (Sala 2): exhibidor de revistas de dos caras
+  // ---------------------------------------------------------------- hemeroteca (Sala 2, en el sótano): exhibidor de revistas de dos caras
   const R = PLANO.hemeroteca;
   const xr = (R.x0 + R.x1) / 2;
-  const muebles = [cajaL(xr - 0.08, xr + 0.08, H, H + 1.55, R.z0, R.z1), cajaL(R.x0, R.x1, H, H + 0.12, R.z0, R.z1)];
+  const muebles = [cajaL(xr - 0.08, xr + 0.08, Y2, Y2 + 1.55, R.z0, R.z1), cajaL(R.x0, R.x1, Y2, Y2 + 0.12, R.z0, R.z1)];
   const revistas = [];
   const texRev = texDiarios();
   for (const s of [-1, 1]) for (let k = 0; k < 3; k++) {
-    const y = H + 0.35 + k * 0.42;
+    const y = Y2 + 0.35 + k * 0.42;
     muebles.push(cajaL(xr + s * 0.08, xr + s * 0.55, y - 0.012, y + 0.012, R.z0 + 0.05, R.z1 - 0.05));
     for (let z = R.z0 + 0.35; z < R.z1 - 0.2; z += 0.5) {
       const p = new THREE.PlaneGeometry(0.4, 0.34);
@@ -306,13 +307,13 @@ export function construirInteriorUP(b3d) {
     texto(ctx, 'HEMEROTECA', w / 2, h * 0.36, { tam: h * 0.34, peso: 800 });
     texto(ctx, 'Revistas, diarios y boletines · estantería abierta', w / 2, h * 0.76, { tam: h * 0.17, peso: 500, color: '#dbeafe', max: w * 0.94 });
   }, { doble: true });
-  rotuloR.rotation.y = Math.PI / 2; rotuloR.position.set(xr, H + 2.55, (R.z0 + R.z1) / 2);
+  rotuloR.rotation.y = Math.PI / 2; rotuloR.position.set(xr, Y2 + 2.55, (R.z0 + R.z1) / 2);
   p2.add(fusionar(muebles, mats.madera), new THREE.Mesh(mergeGeometries(revistas), new THREE.MeshStandardMaterial({ map: texRev, roughness: 0.85, side: THREE.DoubleSide })), rotuloR);
 
   // ---------------------------------------------------------------- carritos para dejar los libros consultados
   for (const [piso, x, z, giro] of [[1, -20.6, 5.05, 0], [1, -0.5, -11.55, 0], [1, 9.5, -11.55, 0], [2, -20.6, 5.05, 0], [2, 4.0, -12.5, 0]]) {
     const c = carrito(texLib, mats);
-    c.position.set(x, piso === 2 ? H : 0, z); c.rotation.y = giro;
+    c.position.set(x, yPiso(piso), z); c.rotation.y = giro;
     (piso === 2 ? p2 : p1).add(c);
   }
 }

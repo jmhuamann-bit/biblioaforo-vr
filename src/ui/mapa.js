@@ -1,6 +1,6 @@
 // Mapa interactivo (SVG en metros) de cada piso: mesas, asientos con su estado, zonas,
 // escalera, puertas, "Estás aquí", ruta y destino. Se puede acercar y arrastrar.
-import { PLANO, NOMBRE_ZONA } from '../biblioteca/plano.js';
+import { PLANO, NOMBRE_ZONA, yPiso } from '../biblioteca/plano.js';
 import { cumpleFiltros, libresPorMesa } from '../biblioteca/recomendador.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -80,7 +80,7 @@ export class Mapa {
         el('line', { x1: t.x0, y1: z, x2: t.x1, y2: z, class: 'm-peldano' }, g);
       }
     }
-    this.#texto(g, (E.x0 + E.x1) / 2, E.z0 - 0.4, piso === 1 ? 'Escalera al piso 2' : 'Escalera', 'm-etq-centro peq');
+    this.#texto(g, (E.x0 + E.x1) / 2, E.z0 - 0.4, piso === 1 ? 'Escalera al sótano' : 'Escalera al piso 1', 'm-etq-centro peq');
     // mesas y asientos
     const porMesa = libresPorMesa(this.estado);
     for (const m of P.mesas) {
@@ -157,7 +157,7 @@ export class Mapa {
       const p = this.piso === 2 ? E.portal2 : E.portal1;
       el('circle', { cx: p.x, cy: p.z, r: 0.42, class: 'm-aqui', style: 'fill:none;stroke:#38bdf8;stroke-width:0.16' }, this.capaMarcas);
       const t = el('text', { x: p.x + 0.9, y: p.z - 0.6, class: 'm-aqui-etq' }, this.capaMarcas);
-      t.textContent = this.piso === 2 ? 'Llegas por la escalera' : 'Bajas por la escalera';
+      t.textContent = this.piso === 2 ? 'Llegas bajando la escalera' : 'Llegas subiendo la escalera';
     }
     const a = this.elegido && this.estado.get(this.elegido);
     if (a && a.piso === this.piso) {
@@ -172,11 +172,11 @@ export class Mapa {
     this.capaRuta.innerHTML = '';
     if (!pts) return;
     // solo los tramos del piso que se ve (la escalera se dibuja hasta su borde)
-    const y = (this.piso - 1) * PLANO.alturaPiso;
+    const y = yPiso(this.piso), mitad = (yPiso(1) + yPiso(2)) / 2;
     const tramos = [];
     let actual = [];
     for (const p of pts) {
-      const enPiso = Math.abs(p.y - y) < 0.6 || (this.piso === 1 ? p.y < 2.3 : p.y > 2.2);
+      const enPiso = Math.abs(p.y - y) < 0.6 || (this.piso === 1 ? p.y > mitad - 0.05 : p.y < mitad + 0.05);
       if (enPiso) actual.push(p); else if (actual.length) { tramos.push(actual); actual = []; }
     }
     if (actual.length) tramos.push(actual);

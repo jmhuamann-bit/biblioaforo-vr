@@ -2,7 +2,7 @@
 // funciona cada pieza del sistema; puedes sentarte, pedir una ruta a cualquier asiento (mapa)
 // o mirar desde arriba. La biblioteca sigue viva alrededor.
 import * as THREE from 'three';
-import { PLANO, ruta, rutaLlegada, yPiso, accesoAsiento, NOMBRE_ZONA, enEscalera } from '../biblioteca/plano.js';
+import { PLANO, ruta, rutaLlegada, yPiso, accesoAsiento, NOMBRE_ZONA, enEscalera, nivelDe } from '../biblioteca/plano.js';
 import { describirObjeto } from './jugador.js';
 import { VistaAerea } from './vistaAerea.js';
 import * as H from './hudJuego.js';
@@ -10,16 +10,16 @@ import * as H from './hudJuego.js';
 const PUNTOS = [
   { id: 'entrada', piso: 1, x: 0.5, z: 11.6, titulo: 'Sensor S1 · puerta de entrada', texto: 'Un sensor infrarrojo cruza la puerta con un haz invisible. Cada vez que alguien lo corta, el ESP32 suma 1 a «personas dentro». No sabe en qué sentido pasas: solo cuenta cruces. Por eso la entrada y la salida son puertas distintas.' },
   { id: 'salida', piso: 1, x: 5.5, z: 11.6, titulo: 'Sensor S2 · puerta de salida', texto: 'El segundo sensor resta 1 con cada cruce: personas dentro = entradas − salidas. Si dos personas pasan pegadas, el haz no se libera entre ellas y cuenta solo una (un error real que se ve en la maqueta).' },
-  { id: 'totem', piso: 1, x: -3.2, z: 9.3, titulo: 'Tótem de disponibilidad', texto: 'Resume lo que miden los sensores: personas dentro (puertas) y asientos libres por piso (cámaras). Así decides a qué piso subir sin recorrerlos.' },
+  { id: 'totem', piso: 1, x: -3.2, z: 9.3, titulo: 'Tótem de disponibilidad', texto: 'Resume lo que miden los sensores: personas dentro (puertas) y asientos libres en el piso 1 y en el sótano (cámaras). Así sabes si conviene bajar antes de recorrerlo.' },
   { id: 'piloto', piso: 1, x: -10, z: 4.7, titulo: 'Mesa piloto 1-01 = la maqueta', texto: 'Es la única mesa que existe de verdad: la maqueta 1:17 con su ESP32-CAM. Con «Datos reales», sus cuatro asientos (A1–A4) siguen a la cámara física. Todo lo demás es una proyección simulada del sistema completo.' },
   { id: 'camara', piso: 1, x: 2.5, z: 0.8, titulo: 'Una ESP32-CAM por mesa', texto: 'Mira el techo: cada mesa tendría su cámara. Compara cada asiento con una foto de la mesa vacía; si cambia más del 20 % durante 3 lecturas seguidas (0,9 s), el asiento pasa a ocupado. No reconoce caras: solo cambios de brillo, así que una mochila también «ocupa».' },
   { id: 'mostrador', piso: 1, x: 12.5, z: 8.2, titulo: 'Personas ≠ asientos', texto: 'Quien está en el mostrador, en los estantes o de paso cuenta como persona dentro, pero no ocupa asiento. Por eso hay dos indicadores distintos: el de las puertas (aforo 381) y el de las cámaras (332 asientos).' },
-  { id: 'escalera', piso: 1, x: -15.2, z: 11.4, titulo: 'Escalera a la Sala 2', texto: 'Arriba están 236 de los 332 asientos (59 mesas). Subir cuesta un minuto: el tótem y el mapa te dicen antes si vale la pena.' },
-  { id: 'silencio', piso: 2, x: -7, z: -1.6, titulo: 'Zona de silencio', texto: 'La mitad izquierda de la Sala 2 es para estudiar en silencio. No todos los asientos libres sirven para todos: el mapa puede filtrar por zona, enchufe o ventana.' },
+  { id: 'escalera', piso: 1, x: -15.2, z: 11.4, titulo: 'Escalera al sótano', texto: 'Como en la UP, la Sala 2 está en el sótano: abajo están 236 de los 332 asientos (59 mesas). Bajar y volver cuesta un par de minutos: el tótem y el mapa te dicen antes si vale la pena.' },
+  { id: 'silencio', piso: 2, x: -7, z: -1.6, titulo: 'Zona de silencio', texto: 'La mitad izquierda de la Sala 2, en el sótano, es para estudiar en silencio. No todos los asientos libres sirven para todos: el mapa puede filtrar por zona, enchufe o ventana.' },
   { id: 'grupo', piso: 2, x: 8.2, z: -1.6, titulo: 'Trabajo en grupo y enchufes', texto: 'Mesas para conversar. Las que tienen regleta (la franja clara sobre la mesa) permiten cargar la laptop: una de cada dos columnas. Un grupo necesita varios asientos libres en la misma mesa.' },
   { id: 'galeria', piso: 1, x: -1.8, z: 15.7, titulo: 'La entrada real de la UP', texto: 'Así se llega a la Biblioteca Jorge Basadre Grohmann: por la galería del Pabellón C, entre columnas redondas de concreto. Junto a la puerta, el cartel real dice AFORO 381 PERSONAS (el mismo límite de BiblioAforo) y el horario: de lunes a viernes, de 7:30 a 22:00.' },
   { id: 'espacios', piso: 1, x: 17.4, z: -1.5, titulo: 'Salas de estudio y Sala 3', texto: 'Las salas de estudio grupales se reservan en línea y no tienen cámara: no cuentan entre los 332 asientos. La Sala 3 guarda materiales especiales (tesis, papers) y es de acceso restringido: se piden en el módulo de atención.' },
-  { id: 'ventana', piso: 2, x: 19.4, z: -4.5, titulo: 'Junto a la ventana', texto: 'La columna pegada al ventanal es la más pedida: los estudiantes virtuales la eligen 1,5 veces más que el resto. Por eso se llena primero.' },
+  { id: 'sotano', piso: 2, x: -14.6, z: 11.2, titulo: 'Sala 2 · bajo tierra', texto: 'El sótano no tiene ventanas: se ilumina con luz artificial y se ventila con extracción de aire (las rejillas de arriba). Esa luz pareja todo el día ayuda a las cámaras, que comparan el brillo de cada asiento con una foto de la mesa vacía.' },
 ];
 const ALCANCE = 1.7;
 
@@ -100,7 +100,7 @@ export class Libre {
       }
     })];
     this.#pintar();
-    H.banner('Modo libre', 'info', 'Recorre los dos pisos a tu ritmo. Acércate a los círculos azules (i) para descubrir cómo funciona el sistema.', 5000);
+    H.banner('Modo libre', 'info', 'Recorre el piso 1 y el sótano a tu ritmo. Acércate a los círculos azules (i) para descubrir cómo funciona el sistema.', 5000);
   }
 
   detener() {
@@ -194,7 +194,7 @@ export class Libre {
     this.esc.marcar({ tuyo: a.id });
     this.j.sentarEn(a);
     this.son.sentarse();
-    H.banner(`Te sentaste en ${a.id}`, 'ok', `La cámara de la mesa ${a.mesa} te detectó: libres en el piso ${a.piso}: ${antes} → ${this.b.libres(a.piso)}. Pulsa E para levantarte.`, 4200);
+    H.banner(`Te sentaste en ${a.id}`, 'ok', `La cámara de la mesa ${a.mesa} te detectó: libres en el ${nivelDe(a.piso)}: ${antes} → ${this.b.libres(a.piso)}. Pulsa E para levantarte.`, 4200);
     this.app.actualizarPistas();
   }
 
@@ -218,7 +218,7 @@ export class Libre {
     this.b3d.marcarDestino(a);
     this.son.seleccion();
     this.#calcularRuta();
-    H.banner(`Ruta al asiento ${a.id}`, 'info', `${NOMBRE_ZONA[a.zona]} · piso ${a.piso} · sigue la cinta del suelo`, 2600);
+    H.banner(`Ruta al asiento ${a.id}`, 'info', `${NOMBRE_ZONA[a.zona]} · ${nivelDe(a.piso)} · sigue la cinta del suelo`, 2600);
     return true;
   }
 

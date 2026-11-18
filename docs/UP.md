@@ -6,7 +6,7 @@ BiblioAforo VR modela su biblioteca a partir de la **Biblioteca «Jorge Basadre 
 
 | Fuente | Qué aporta |
 | --- | --- |
-| [Acerca de la Biblioteca](https://campusvirtual.up.edu.pe/biblioteca/acerca.aspx) | Funciona en un **local de dos pisos**. Horario: lunes a viernes de 7:30 a 22:00 y sábados de 8:00 a 20:00. Dirección: Av. Salaverry 2020, Jesús María. |
+| [Acerca de la Biblioteca](https://campusvirtual.up.edu.pe/biblioteca/acerca.aspx) | Funciona en un **local de dos niveles**: el primer piso del Pabellón C (a nivel de la galería) y un **sótano**. Horario: lunes a viernes de 7:30 a 22:00 y sábados de 8:00 a 20:00. Dirección: Av. Salaverry 2020, Jesús María. |
 | [Guía de la Biblioteca · distribución de salas](http://guiadebiblioteca.up.edu.pe/distribucion_sala.aspx) | **Sala 1**: libros 000–599 (Tecnología, Filosofía, Religión, Ciencias Sociales, Economía, Derecho, Lingüística, Matemática). **Sala 2**: libros 600–999 (Contabilidad, Administración, Marketing, Literatura, Historia) y la **hemeroteca**. **Sala 3**: materiales especiales (tesis, papers, expedientes, libros anteriores al 2000), de acceso restringido: se piden en los módulos de atención. |
 | [Reglamento de Biblioteca 2021](https://campusvirtual.up.edu.pe/Biblioteca/doc/Reglamento-Biblioteca-2021.pdf) | Estantería abierta y **carritos** para dejar lo consultado; libros del depósito y antiguos se piden en los **módulos de atención**; hemeroteca de acceso directo; préstamo automatizado; **salas de estudio grupales** con reserva en línea; **computadoras** para bases de datos (máximo 1 hora); laptops solo en mesas con tomacorriente; solo agua en envase cerrado; silencio y celular en silencio; **pertenencias solas por más de 20 minutos las retira seguridad**. |
 | [Preguntas frecuentes (2014)](https://campusvirtual.up.edu.pe/Biblioteca_ant/Lists/SeccionTest/Attachments/34/Preguntas_Frecuentes_revisado_2014.pdf) | Las salas de estudio son de uso grupal; identificación con carné en la puerta de ingreso; una colección en el Pabellón F (sala F-109). |
@@ -34,17 +34,25 @@ BiblioAforo VR modela su biblioteca a partir de la **Biblioteca «Jorge Basadre 
 - Cartel colgante **BIBLIOTECA** y panel **SERVICIOS**.
 - **Exhibidor de diarios** y aviso de normas.
 
+## El sótano
+
+La biblioteca no tiene segundo piso: la **Sala 2 está en el sótano**, debajo del primer piso.
+- Una **escalera en U** baja junto a la entrada, a la izquierda: un tramo hasta el descanso (−2,25 m) y otro hasta el sótano (−4,5 m), con barandas de vidrio y bandas antideslizantes. En el piso 1 el hueco tiene baranda por tres lados.
+- El sótano tiene **muros de contención** de concreto con acabado claro, contrazócalo de madera, **rejillas de extracción** de aire, extintores y el muro gráfico **SALA 2 · SÓTANO**. No tiene ventanas: se ilumina con luz artificial (por eso en el Detective la misión de la ventana se resuelve en el piso 1).
+- Encima del piso 1 siguen los **pisos altos del Pabellón C** (aulas y oficinas, no son de la biblioteca): por fuera se ven con sus ventanas de franjas; por dentro no se modelan.
+- En la **casa de muñecas** (menú y Caos) el piso 1 se levanta con su vitrina y debajo, en el hueco del terreno, se ve el sótano con su gente. En la vista aérea (`V`) del sótano se quita el piso 1.
+
 ## Qué se modeló a partir de las fuentes oficiales
 
 | En la simulación | Dónde |
 | --- | --- |
-| Sala 1 · colección 000–599 (piso 1) y Sala 2 · colección 600–999 · hemeroteca (piso 2) | carteles colgantes de cada sala |
-| Hemeroteca: exhibidor de revistas de dos caras | piso 2, junto a los estantes de la izquierda |
+| Sala 1 · colección 000–599 (piso 1) y Sala 2 · colección 600–999 · hemeroteca (sótano) | carteles colgantes de cada sala y muro gráfico del sótano |
+| Hemeroteca: exhibidor de revistas de dos caras | sótano, junto a los estantes de la izquierda |
 | Sala 3 · materiales especiales, acceso restringido | piso 1, a la derecha del vestíbulo (vidrio, puerta, repisas) |
 | Cuatro salas de estudio grupales con reserva | piso 1, junto al ventanal derecho |
 | Computadoras para bases de datos (máximo 1 hora) | piso 1, a la izquierda (12 puestos) |
 | Módulo de atención (préstamo y devolución) | el antiguo mostrador de préstamos |
-| Carritos de libros consultados | junto a los estantes de los dos pisos |
+| Carritos de libros consultados | junto a los estantes del piso 1 y del sótano |
 | Mesas con tomacorriente | ya existían (una de cada dos columnas) |
 | Pertenencias que se retiran a los 20 min | una mochila sola aparta un asiento como máximo 20 minutos simulados |
 | Horario de 7:30 a 22:00 | el reloj del día ya iba de 7:30 a 22:00 |
@@ -53,7 +61,7 @@ Las salas de estudio, la Sala 3, las computadoras, la hemeroteca y los diarios s
 
 ## Qué sigue siendo referencial
 
-- No hay un plano público de la biblioteca: la distribución de mesas (24 en la Sala 1 y 59 en la Sala 2), la ubicación de cada sala y las medidas de la galería son **aproximadas**.
+- No hay un plano público de la biblioteca: la distribución de mesas (24 en la Sala 1 y 59 en la Sala 2), la ubicación de cada sala, la posición y la forma de la escalera al sótano y las medidas de la galería son **aproximadas**.
 - Las 49 salas de estudio de la UP son de toda la universidad; en la simulación hay 4 dentro de la biblioteca como ejemplo.
 - Las fotos muestran una escalera o rampa justo después de la entrada; la simulación mantiene la entrada al nivel del piso 1, porque los sensores y las rutas dependen de ello.
 - Los cajeros, diarios y revistas son genéricos: no se reproducen marcas reales.

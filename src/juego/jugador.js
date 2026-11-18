@@ -1,7 +1,7 @@
-// El jugador en primera persona: caminar por los dos pisos y la escalera, mirar con la mira
+// El jugador en primera persona: caminar por el piso 1, la escalera y el sótano, mirar con la mira
 // y actuar sobre lo que tiene enfrente (asientos, mesas, estudiantes, tótem, puertas, cámaras).
 import * as THREE from 'three';
-import { alturaSuelo, yPiso } from '../biblioteca/plano.js';
+import { alturaSuelo, yPiso, nivelPorAltura } from '../biblioteca/plano.js';
 
 const $ = (s) => document.querySelector(s);
 
@@ -45,7 +45,7 @@ export class Jugador {
     this.app.control.usarPaseo({
       pos: [x, y, z], rumbo, ojos: 1.62, velocidad, near: 0.05,
       libre: (px, pz) => this.escena.transitable(px, pz, this.nivel),
-      altura: (px, pz) => { const yy = alturaSuelo(px, pz, this.nivel); if (yy > 3.4) this.nivel = 2; else if (yy < 1.1) this.nivel = 1; return yy; },
+      altura: (px, pz) => { const yy = alturaSuelo(px, pz, this.nivel); this.nivel = nivelPorAltura(yy, this.nivel); return yy; },
     });
     this.mira.hidden = false;
   }
@@ -149,7 +149,7 @@ export function describirObjeto(app, hit) {
     const que = ag.estado === 'cola' ? 'espera afuera: aforo completo' : ag.destino === 'asiento' ? (ag.dentro ? 'va a su asiento' : 'llegando') : ag.destino === 'espera' ? 'busca asiento y espera' : ag.destino === 'estante' ? 'busca un libro' : 'se va';
     return { titulo: `Estudiante · ${que}`, detalle: ag.asiento && ag.destino === 'asiento' ? `Rumbo a ${ag.asiento}` : '', alerta: ag.rival };
   }
-  if (hit.tipo === 'totem') return { titulo: 'Tótem de disponibilidad', detalle: `Piso 1: ${b.libres(1)} libres · Piso 2: ${b.libres(2)} libres · ${b.puertas.dentro}/${b.puertas.aforo} personas` };
+  if (hit.tipo === 'totem') return { titulo: 'Tótem de disponibilidad', detalle: `Piso 1: ${b.libres(1)} libres · Sótano: ${b.libres(2)} libres · ${b.puertas.dentro}/${b.puertas.aforo} personas` };
   if (hit.tipo === 'puerta') return { titulo: hit.id === 'entrada' ? 'Puerta de entrada · sensor S1' : 'Puerta de salida · sensor S2', detalle: hit.id === 'entrada' ? 'Cada cruce suma una persona (aforo 381)' : 'Cada cruce resta una persona' };
   if (hit.tipo === 'camara') {
     const libres = b.asientos.filter((a) => a.mesa === hit.id && b.estadoDe(a) === 'libre').length;

@@ -4,7 +4,7 @@
 // detalle), 9 peinados × 2, lentes y mochilas, más sombras de contacto. No cambia la simulación:
 // solo lee la multitud y el estado de los asientos.
 import * as THREE from 'three';
-import { PLANO, yPiso } from '../biblioteca/plano.js';
+import { PLANO, yPiso, fraccionAlzada } from '../biblioteca/plano.js';
 import { persona, PEINADOS } from './humanos/persona.js';
 import { geometriaCuerpo, geometriaPelo, geometriaGafas, geometriaMochila, geometriaSeleccion, geometriaCelular, geometriaLibro, N_HUESOS } from './humanos/modelo.js';
 import { texturasRostro, texturaTela, texturaPelo, EXPRESION } from './humanos/texturasHumanos.js';
@@ -249,9 +249,12 @@ export class Gente {
     }
     for (const ag of multitud.agentes) {
       if (!ag.visible || ag.retraso > 0) continue;
-      const piso = ag.y > PLANO.alturaPiso * 0.5 ? 2 : 1;
-      if (!pisoVisible(piso) && !pisoVisible(ag.piso)) continue;
-      lista.push({ clave: ag.id, tipo: 0, ag, semilla: ag.semilla ?? ag.id * 7919, x: ag.x, y: ag.y + explosion * lim(ag.y / PLANO.alturaPiso, 0, 1), z: ag.z, piso: ag.piso, asiento: null });
+      const piso = ag.y < yPiso(2) / 2 ? 2 : 1;
+      const dentro = ag.x > PLANO.x0 && ag.x < PLANO.x1 && ag.z > PLANO.z0 && ag.z < PLANO.z1;
+      if (dentro && !pisoVisible(piso) && !pisoVisible(ag.piso)) continue;
+      // casa de muñecas: el piso 1 está levantado; al cruzar la puerta pasarían de golpe de la galería a él
+      if (explosion > 0.3 && Math.abs(ag.z - PLANO.z1) < 0.75) continue;
+      lista.push({ clave: ag.id, tipo: 0, ag, semilla: ag.semilla ?? ag.id * 7919, x: ag.x, y: ag.y + explosion * fraccionAlzada(ag.x, ag.y, ag.z), z: ag.z, piso: ag.piso, asiento: null });
     }
     const verdad = multitud.verdad;
     for (const a of estado.asientos) {
@@ -261,7 +264,7 @@ export class Gente {
       if (e === 'sinDato') { const v = verdad.get(a.id); hay = !!(v && v.ocupado && !v.objeto); }
       if (!hay || !pisoVisible(a.piso)) continue;
       const o = multitud.ocupantes.get(a.id);
-      lista.push({ clave: `s${a.id}`, tipo: 1, ag: null, semilla: o?.semilla ?? hashTexto(a.id), x: a.x, y: yPiso(a.piso) + (a.piso === 2 ? explosion : 0), z: a.z, piso: a.piso, asiento: a });
+      lista.push({ clave: `s${a.id}`, tipo: 1, ag: null, semilla: o?.semilla ?? hashTexto(a.id), x: a.x, y: yPiso(a.piso) + (a.piso === 1 ? explosion : 0), z: a.z, piso: a.piso, asiento: a });
     }
     if (avatar?.visible) lista.push({ clave: 'jugador', tipo: 2, ag: null, semilla: 424242, x: avatar.position.x, y: avatar.position.y, z: avatar.position.z, piso: 1, asiento: null, yaw: avatar.rotation.y });
     // vivos: liberar a quienes ya no están

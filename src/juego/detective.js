@@ -1,7 +1,7 @@
 // Experiencia DETECTIVE: cada estudiante necesita algo distinto (silencio, enchufe, ventana, una
 // mesa para su grupo…). Recorres la biblioteca, inspeccionas asientos, marcas candidatos, los
 // comparas y decides. Mientras tanto la biblioteca sigue viva: un candidato puede ocuparse.
-import { PLANO, NOMBRE_ZONA, yPiso } from '../biblioteca/plano.js';
+import { PLANO, NOMBRE_ZONA, yPiso, nivelDe } from '../biblioteca/plano.js';
 import { camposDesde, distanciaAsiento, libresPorMesa } from '../biblioteca/recomendador.js';
 import { describirObjeto } from './jugador.js';
 import { VistaAerea } from './vistaAerea.js';
@@ -17,9 +17,9 @@ const MISIONES = [
     filtros: { grupo: 3 },
     condiciones: [['3 libres en su mesa', (a, c) => (c.libresMesa.get(a.mesa) || 0) >= 3], ['Libre ahora', libre]],
     extra: ['Zona de trabajo en grupo', (a) => a.zona === 'grupo'] },
-  { id: 'ventana', icono: '🪟', cliente: 'Lucía', texto: 'Lucía lee mejor con luz natural: quiere un asiento <b>junto a la ventana</b> en el <b>piso 2</b>.',
-    filtros: { piso: 2, ventana: true },
-    condiciones: [['Piso 2', (a) => a.piso === 2], ['Junto a la ventana', (a) => a.ventana], ['Libre ahora', libre]] },
+  { id: 'ventana', icono: '🪟', cliente: 'Lucía', texto: 'Lucía lee mejor con luz natural: quiere un asiento <b>junto a la ventana</b>. El sótano no tiene ventanas: búscalo en el <b>piso 1</b>.',
+    filtros: { piso: 1, ventana: true },
+    condiciones: [['Piso 1 (el sótano no tiene ventanas)', (a) => a.piso === 1], ['Junto a la ventana', (a) => a.ventana], ['Libre ahora', libre]] },
   { id: 'rapido', icono: '⏱️', cliente: 'Mateo', texto: 'Mateo tiene 10 minutos entre clases: necesita el asiento libre <b>más cercano a ti</b>. Cada metro cuenta.',
     filtros: {},
     condiciones: [['Libre ahora', libre], ['Casi el más cercano (±20 %)', (a, c) => c.metros(a) <= c.mejorMetros() * 1.2 + 2]] },
@@ -243,7 +243,7 @@ export class Detective {
       <p class="nota" style="margin:0">${mi.texto}</p>
       <table class="candidatos">
         <tr><th>Asiento</th>${cols.map((c) => `<th>${c}</th>`).join('')}<th>Distancia</th><th></th></tr>
-        ${filas.map(({ a, ev }) => `<tr><td><b>${a.id}</b><br><small>${NOMBRE_ZONA[a.zona]} · piso ${a.piso}</small></td>${ev.res.map((r) => `<td class="${r.ok ? 'ok' : 'no'}">${r.ok ? '✓' : '✕'}</td>`).join('')}${ev.extra ? `<td class="${ev.extra.ok ? 'ok' : ''}">${ev.extra.ok ? '✓' : '—'}</td>` : ''}<td>${Math.round(ev.metros)} m</td><td><button data-elegir="${a.id}" class="${ev.cumple ? 'primario' : ''}">Elegir</button></td></tr>`).join('')}
+        ${filas.map(({ a, ev }) => `<tr><td><b>${a.id}</b><br><small>${NOMBRE_ZONA[a.zona]} · ${nivelDe(a.piso)}</small></td>${ev.res.map((r) => `<td class="${r.ok ? 'ok' : 'no'}">${r.ok ? '✓' : '✕'}</td>`).join('')}${ev.extra ? `<td class="${ev.extra.ok ? 'ok' : ''}">${ev.extra.ok ? '✓' : '—'}</td>` : ''}<td>${Math.round(ev.metros)} m</td><td><button data-elegir="${a.id}" class="${ev.cumple ? 'primario' : ''}">Elegir</button></td></tr>`).join('')}
       </table>
       <div class="fila"><button data-r="seguir">Seguir investigando</button></div>`,
     (r) => r.addEventListener('click', (e) => {
@@ -286,7 +286,7 @@ export class Detective {
     H.resultado(`
       <h2>${mi.icono} ¡Misión cumplida!</h2>
       ${H.estrellas(n)}
-      <p style="margin:0">${mi.cliente === 'Tú' ? 'Elegiste' : `${mi.cliente} se sienta en`} <b>${a.id}</b> · ${NOMBRE_ZONA[a.zona]} · piso ${a.piso} · ${Math.round(ev.metros)} m</p>
+      <p style="margin:0">${mi.cliente === 'Tú' ? 'Elegiste' : `${mi.cliente} se sienta en`} <b>${a.id}</b> · ${NOMBRE_ZONA[a.zona]} · ${nivelDe(a.piso)} · ${Math.round(ev.metros)} m</p>
       ${cliente ? `<p class="nota" style="margin:0">${mi.cliente} ${cliente > 1 ? 'vienen' : 'viene'} desde la plaza: cruzará${cliente > 1 ? 'n' : ''} el sensor S1 y la cámara de la mesa ${a.mesa} confirmará el asiento.</p>` : ''}
       <p class="nota">${mejor && mejor.a.id !== a.id ? `La mejor opción en este momento era <b>${mejor.a.id}</b>, a ${Math.round(mejor.metros)} m.` : '¡Era la mejor opción posible en este momento!'} ${mi.extra && !ev.extra.ok ? `(Faltó el extra: ${mi.extra[0].toLowerCase()}.)` : ''} ${this.uso.pista ? 'Usaste la pista: máximo 2 ★.' : ''}</p>
       <p class="mini">3 ★: cumple todo y está a menos de 1,3 veces la distancia de la mejor opción. Cada intento fallido resta una estrella.</p>

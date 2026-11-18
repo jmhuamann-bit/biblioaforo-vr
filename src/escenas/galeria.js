@@ -10,6 +10,7 @@
 //   · vitrina de la biblioteca: vidrio con franja esmerilada, muro gráfico «BIBLIOTECA · Jorge Basadre
 //     Grohmann», pilar con «HORARIO DE ATENCIÓN» y «AFORO 381 PERSONAS», señal de accesibilidad,
 //     banner enrollable de préstamo de vacaciones, tacho de reciclaje de papel y tachos de acero
+// La vitrina es la fachada del piso 1 (this.frente): en la casa de muñecas se levanta con él para dejar ver el sótano.
 // Todo lo repetido va por instancias o fusionado por material (fluido en el Meta Quest).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -300,8 +301,9 @@ export class Galeria {
     this.mat = mat;
     this.grupo = new THREE.Group();
     this.grupo.name = 'galeria';
-    this.techo = new THREE.Group();          // se oculta en las vistas desde arriba
-    this.grupo.add(this.techo);
+    this.techo = new THREE.Group();          // se oculta en las vistas desde arriba (techo alto, lámparas, marquesina…)
+    this.frente = new THREE.Group();         // vitrina de la biblioteca: sube con el piso 1 en la casa de muñecas
+    this.grupo.add(this.techo, this.frente);
     this.#materiales();
     this.#piso();
     this.#marquesina();
@@ -393,7 +395,8 @@ export class Galeria {
       const c = new THREE.IcosahedronGeometry(1.05, 1); c.scale(1, 1.25, 0.8); c.translate(x, HM + 2.9, z1 - 0.35);
       copas.push(c);
     }
-    this.grupo.add(gris, cielo, lineas, tierra, fusionar(arbustos, this.m.arbusto), fusionar(tallos, this.m.tronco), fusionar(copas, this.m.arbusto));
+    // (va con el techo: desde arriba no tapa a quienes llegan a las puertas)
+    this.techo.add(gris, cielo, lineas, tierra, fusionar(arbustos, this.m.arbusto), fusionar(tallos, this.m.tronco), fusionar(copas, this.m.arbusto));
   }
 
   // ---------------------------------------------------------------- columnas redondas de concreto caravista
@@ -581,7 +584,7 @@ export class Galeria {
 
   // ---------------------------------------------------------------- vitrina de la biblioteca (piso 1)
   #vitrina() {
-    const g = this.grupo;
+    const g = this.frente;
     const P = PLANO.puertas;
     const xa = PLANO.x0, xb = PLANO.x1;
     const muro = { x0: -9.7, x1: -4.5 };

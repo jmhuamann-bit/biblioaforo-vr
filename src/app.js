@@ -333,13 +333,13 @@ class App {
       b3d.pulsarPuerta(tipo);
       if (this.silencio || this.escenaActual !== 'biblioteca') return;
       const x = tipo === 'entrada' ? XP : XS;
-      b3d.flotante(tipo === 'entrada' ? '+1' : '−1', x, 3.1, PLANO.z1, tipo === 'entrada' ? '#4ade80' : '#7dd3fc');
+      b3d.flotante(tipo === 'entrada' ? '+1' : '−1', x, 3.1 + b3d.alzado(1), PLANO.z1, tipo === 'entrada' ? '#4ade80' : '#7dd3fc');
       if (this.modo === 'caos' || this.modo === 'menu' ? cerca(x, 2, PLANO.z1, 80) : cerca(x, 1.5, PLANO.z1, 26)) this.sonido.sensor(tipo);
     });
     this.biblio.on('asiento', ({ a, ahora }) => {
       if (this.silencio || this.escenaActual !== 'biblioteca' || this.modo === 'menu') return;
-      const ex = this.escenas.biblioteca.b3d.explosion;
-      if (cerca(a.x, yPiso(a.piso) + (a.piso === 2 ? ex : 0), a.z, this.modo === 'caos' ? 60 : 9)) this.sonido.asiento(ahora !== 'libre');
+      const b3d = this.escenas.biblioteca.b3d;
+      if (cerca(a.x, yPiso(a.piso) + b3d.alzado(a.piso), a.z, this.modo === 'caos' ? 60 : 9)) this.sonido.asiento(ahora !== 'libre');
     });
   }
 
@@ -569,7 +569,7 @@ class App {
         <dt>🌪️ Caos</dt><dd>Controla llegadas, salidas, mochilas, cámaras y evacuaciones; cumple los 5 retos.</dd>
         <dt>🔎 Detective</dt><dd>Misiones con condiciones (silencio, enchufe, ventana, grupo): inspecciona, compara y decide.</dd>
         <dt>🛠️ Ingeniería</dt><dd>La maqueta con sus sensores: provoca cada lectura y mírala en el Monitor Serie.</dd>
-        <dt>🧭 Libre</dt><dd>Recorre los dos pisos y descubre 10 puntos de interés.</dd>
+        <dt>🧭 Libre</dt><dd>Recorre el piso 1 y el sótano y descubre 12 puntos de interés.</dd>
       </dl>
       <h3>Teclado y ratón</h3>
       <dl class="teclas-ayuda">

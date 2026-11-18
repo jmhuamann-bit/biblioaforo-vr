@@ -79,10 +79,10 @@ export function recomendarPiso(estado) {
   const l1 = estado.libres(1), l2 = estado.libres(2);
   const t1 = estado.total(1), t2 = estado.total(2);
   if (l1 === 0 && l2 === 0) return { piso: null, texto: 'No hay asientos libres en este momento. Puedes esperar en el vestíbulo: el tótem avisa cuando se libere uno.' };
-  if (l1 === 0) return { piso: 2, texto: `El piso 1 está lleno. En el piso 2 hay ${l2} asientos libres.` };
-  if (l2 === 0) return { piso: 1, texto: `El piso 2 está lleno. En el piso 1 hay ${l1} asientos libres.` };
+  if (l1 === 0) return { piso: 2, texto: `El piso 1 está lleno. En el sótano hay ${l2} asientos libres.` };
+  if (l2 === 0) return { piso: 1, texto: `El sótano está lleno. En el piso 1 hay ${l1} asientos libres.` };
   const o1 = 1 - l1 / t1, o2 = 1 - l2 / t2;
-  if (l2 >= l1 * 1.6 && o1 > 0.8) return { piso: 2, texto: `Piso 2: tiene ${l2} asientos libres frente a ${l1} del piso 1 y una zona de silencio.` };
-  if (l1 >= 3 && o1 <= o2) return { piso: 1, texto: `Piso 1: tiene ${l1} asientos libres y no necesitas subir.` };
-  return l2 > l1 ? { piso: 2, texto: `Piso 2: tiene más asientos libres (${l2}).` } : { piso: 1, texto: `Piso 1: tiene ${l1} asientos libres cerca de la entrada.` };
+  if (l2 >= l1 * 1.6 && o1 > 0.8) return { piso: 2, texto: `Sótano: tiene ${l2} asientos libres frente a ${l1} del piso 1 y una zona de silencio.` };
+  if (l1 >= 3 && o1 <= o2) return { piso: 1, texto: `Piso 1: tiene ${l1} asientos libres y no necesitas bajar.` };
+  return l2 > l1 ? { piso: 2, texto: `Sótano: tiene más asientos libres (${l2}).` } : { piso: 1, texto: `Piso 1: tiene ${l1} asientos libres cerca de la entrada.` };
 }

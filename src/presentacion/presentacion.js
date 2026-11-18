@@ -1,5 +1,5 @@
 // SIMULACIÓN PARA PRESENTACIÓN (sección extra).
-// La biblioteca de Hora punta, con su gente y sus gráficos, pero llena en los dos pisos: la única mesa
+// La biblioteca de Hora punta, con su gente y sus gráficos, pero llena en el piso 1 y el sótano: la única mesa
 // con sitio es la mesa piloto 1-01, con 2 de sus 4 sillas libres. Con el Meta Quest 3 puesto, la
 // persona camina de verdad hacia el sensor S1; cuando el sensor REAL la detecta, en el simulador
 // también entra. Luego va a la mesa piloto, elige una silla libre, se sienta y se queda.
@@ -14,7 +14,7 @@
 // de la biblioteca es simulado. El modo ensayo (sin sensores) se rotula siempre como simulado.
 // No cambia las otras experiencias: usa el mismo mundo y lo deja como estaba al salir.
 import * as THREE from 'three';
-import { PLANO, yPiso, ruta, accesoAsiento, rutaInterior, ESTANTES_FRENTE } from '../biblioteca/plano.js';
+import { PLANO, yPiso, ruta, accesoAsiento, rutaInterior, ESTANTES_FRENTE, nivelPorAltura } from '../biblioteca/plano.js';
 import { describirObjeto } from '../juego/jugador.js';
 import * as H from '../juego/hudJuego.js';
 import { escapar } from '../ui/hud.js';
@@ -146,7 +146,7 @@ export class Presentacion {
     this.#irA(this.enVR ? 'calibracion' : 'a2m');
     H.banner('Simulación para presentación', 'info', this.enVR
       ? 'Párate a 2 m del sensor S1 real, míralo y pulsa A para calibrar.'
-      : 'Los dos pisos están llenos: solo la mesa piloto tiene 2 sillas libres. Pasa frente al sensor S1 real para entrar.', 5600);
+      : 'El piso 1 y el sótano están llenos: solo la mesa piloto tiene 2 sillas libres. Pasa frente al sensor S1 real para entrar.', 5600);
   }
 
   detener() {
@@ -195,7 +195,7 @@ export class Presentacion {
     }
   }
 
-  // ================================================================ el mundo: dos pisos llenos y la mesa piloto
+  // ================================================================ el mundo: piso 1 y sótano llenos, y la mesa piloto
   #prepararMundo() {
     const app = this.app, b = this.b, m = this.m;
     app.silencio = true;
@@ -562,7 +562,7 @@ export class Presentacion {
   #colocarVR(x, z, rumbo, y = 0) {
     const vr = this.vr;
     vr.colocar({ x, y, z, rumbo: rumbo - rumboLocal(vr.camara.quaternion), escala: 1 });
-    vr.nivel = y > 3.4 ? 2 : 1;
+    vr.nivel = nivelPorAltura(y, vr.nivel);
   }
 
   #vibrar(intensidad = 0.5, ms = 80, lado = null) {
@@ -702,7 +702,7 @@ export class Presentacion {
     if (!a) return false;
     if (!this.entro) { this.son.error(); H.banner('Primero entra a la biblioteca', 'info', 'Pasa frente al sensor S1 real: el simulador te deja entrar cuando el sensor te detecta.', 3600); return false; }
     if (this.fase === 'sentado') return false;
-    if (!a.piloto) { this.son.error(); H.banner(`Asiento ${a.id} ocupado`, 'alerta', 'Los dos pisos están llenos: la única mesa con sillas libres es la mesa piloto 1-01 (aro dorado).', 3800); return false; }
+    if (!a.piloto) { this.son.error(); H.banner(`Asiento ${a.id} ocupado`, 'alerta', 'El piso 1 y el sótano están llenos: la única mesa con sillas libres es la mesa piloto 1-01 (aro dorado).', 3800); return false; }
     if (!this.#libre(a)) { this.son.error(); H.banner(`Silla ${letra(a)} ocupada`, 'alerta', this.#camaraViva() ? `La ESP32-CAM real ve ocupada la zona ${zona(a)}.` : 'En la simulación ya hay alguien sentado ahí.', 3400); return false; }
     this.seleccion = a;
     this.esc.marcar({ elegido: a.id });
@@ -850,7 +850,7 @@ export class Presentacion {
       return;
     }
     if (h?.tipo === 'mesa' && h.id === MESA.id && this.entro && this.fase !== 'sentado') { this.#elegirCercano(); return; }
-    if (h?.tipo === 'totem') { H.banner('Tótem de disponibilidad', 'info', `Piso 1: ${this.b.libres(1)} libres · Piso 2: ${this.b.libres(2)} libres · ${this.b.puertas.dentro}/${this.b.puertas.aforo} personas`, 3600); return; }
+    if (h?.tipo === 'totem') { H.banner('Tótem de disponibilidad', 'info', `Piso 1: ${this.b.libres(1)} libres · Sótano: ${this.b.libres(2)} libres · ${this.b.puertas.dentro}/${this.b.puertas.aforo} personas`, 3600); return; }
     this.accionA();
   }
 

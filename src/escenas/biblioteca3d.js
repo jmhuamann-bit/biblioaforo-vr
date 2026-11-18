@@ -1,18 +1,22 @@
-// Biblioteca en 3D: dos pisos, fachada, escalera en U, 83 mesas y 332 sillas, frente a la galería
-// del Pabellón C (como la Biblioteca de la Universidad del Pacífico).
+// Biblioteca en 3D, como la de la Universidad del Pacífico: el piso 1 (Sala 1) a nivel de la galería del
+// Pabellón C y la Sala 2 en el sótano, con una escalera en U que baja; 83 mesas y 332 sillas.
+// Encima del piso 1 siguen los pisos altos del Pabellón C (no son de la biblioteca: solo su volumen).
 // Todo lo repetido se dibuja por instancias (pocas llamadas de dibujo: fluido en el Meta Quest).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { PLANO, yPiso } from '../biblioteca/plano.js';
+import { PLANO, yPiso, fraccionAlzada } from '../biblioteca/plano.js';
 import * as TX from '../motor/texturas.js';
 import { etiqueta, Pantalla, FUENTE, rectRedondo } from '../motor/textos.js';
 import { COLORES } from '../config.js';
 import { Gente } from './gente.js';
-import { Galeria } from './galeria.js';
+import { Galeria, cartel, texto, lienzoTex } from './galeria.js';
 import { construirInteriorUP } from './interiorUP.js';
 
 const H = PLANO.alturaPiso, HS = PLANO.alturaSala;
 const ANCHO = PLANO.x1 - PLANO.x0, FONDO = PLANO.z1 - PLANO.z0;
+const Y2 = yPiso(2);                       // piso del sótano (−4,5 m)
+const cieloDe = (piso) => yPiso(piso) + H - 0.31;   // cielo raso de cada nivel (piso 1: 4,19 m · sótano: −0,31 m)
+const ALZADO = 9.5;                        // casa de muñecas: cuánto se levanta el piso 1 para ver el sótano
 const COL = {
   libre: new THREE.Color(COLORES.libre), ocupado: new THREE.Color(COLORES.ocupado),
   objeto: new THREE.Color(COLORES.objeto), sinDato: new THREE.Color(COLORES.sinDato),
@@ -20,6 +24,20 @@ const COL = {
 };
 
 function geoCaja(w, h, d, x = 0, y = 0, z = 0) { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); return g; }
+const geoCajaL = (x0, x1, y0, y1, z0, z1) => geoCaja(x1 - x0, y1 - y0, z1 - z0, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+
+// Superficie horizontal que mira hacia arriba, de un polígono en (x, z), con huecos; uv normalizados al
+// rectángulo r (así la textura repite igual que en un PlaneGeometry de ese tamaño)
+function geoSuelo(puntos, r, huecos = []) {
+  const forma = new THREE.Shape(puntos.map(([x, z]) => new THREE.Vector2(x, -z)));
+  for (const h of huecos) forma.holes.push(new THREE.Path(h.map(([x, z]) => new THREE.Vector2(x, -z))));
+  const g = new THREE.ShapeGeometry(forma);
+  g.rotateX(-Math.PI / 2);                 // (x, −z) → (x, 0, z), con la normal hacia +y
+  const p = g.attributes.position, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) - r.x0) / r.w, 1 - (p.getZ(i) - r.z0) / r.d);
+  return g;
+}
+const rect = (x0, x1, z0, z1) => [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
 
 // Baldosas (piedra del vestíbulo, adoquines de la plaza)
 function baldosas({ tam = 512, base = 0xd9d7d1, junta = 0xa8a59e, n = 4, variacion = 0.05, semilla = 2 } = {}) {
@@ -53,6 +71,8 @@ function geoSilla() {
   return mergeGeometries(partes);
 }
 function geoCojin() { return geoCaja(0.42, 0.035, 0.38, 0, 0.49, 0.01); }
+
+function visibleEnEscena(o) { for (; o; o = o.parent) if (!o.visible) return false; return true; }
 
 export class Biblioteca3D {
   constructor() {
@@ -145,7 +165,7 @@ export class Biblioteca3D {
     const rival = multitud.rival;
     if (rival && rival.visible) {
       this.marcaRival.visible = true;
-      this.marcaRival.position.set(rival.x, rival.y + this.explosion * Math.min(1, Math.max(0, rival.y / PLANO.alturaPiso)) + 2.15 + Math.sin(t / 180) * 0.08, rival.z);
+      this.marcaRival.position.set(rival.x, rival.y + this.explosion * fraccionAlzada(rival.x, rival.y, rival.z) + 2.15 + Math.sin(t / 180) * 0.08, rival.z);
     } else this.marcaRival.visible = false;
   }
 
@@ -198,8 +218,11 @@ export class Biblioteca3D {
     const G = PLANO.galeria;
     const pasto = TX.grano({ tam: 256, base: 0x5f8f4a, variacion: 0.12, escala: 18, semilla: 4, fuerzaNormal: 0.6 });
     pasto.map.repeat.set(30, 30); pasto.normalMap.repeat.set(30, 30);
-    const cesped = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.MeshStandardMaterial({ map: pasto.map, normalMap: pasto.normalMap, roughness: 1 }));
-    cesped.rotation.x = -Math.PI / 2; cesped.position.y = -0.05;
+    // (con el hueco del sótano: se ve cuando el piso 1 se levanta en la casa de muñecas)
+    const e = 0.35;
+    const cesped = new THREE.Mesh(geoSuelo(rect(-120, 120, -120, 120), { x0: -120, z0: -120, w: 240, d: 240 }, [rect(PLANO.x0 - e, PLANO.x1 + e, PLANO.z0 - e, PLANO.z1 + e)]),
+      new THREE.MeshStandardMaterial({ map: pasto.map, normalMap: pasto.normalMap, roughness: 1 }));
+    cesped.position.y = -0.05;
     g.add(cesped);
     // árboles (instancias)
     const r = TX.azar(77);
@@ -222,157 +245,207 @@ export class Biblioteca3D {
   }
 
   // ---------------------------------------------------------------- estructura: losas, muros, vidrio, techos
+  // piso 1 (this.pisos[1]): losa con el hueco de la escalera, sala, vestíbulo, muros y vidrio; bajo la losa, el
+  //   cielo raso del sótano · sótano (this.pisos[2]): piso, muros de contención y acabados · encima (this.techo):
+  //   cielo raso del piso 1 y los pisos altos del Pabellón C, que se ocultan en las vistas desde arriba
   #estructura() {
-    const E = PLANO.escalera;
-    // --- piso 1: parquet en la sala y piedra en el vestíbulo
-    const zv = PLANO.vestibuloZ;
-    const sala1 = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO, zv - PLANO.z0), this.mat.parquet);
-    sala1.rotation.x = -Math.PI / 2; sala1.position.set(0, 0.002, (PLANO.z0 + zv) / 2);
-    const vest = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO, PLANO.z1 - zv), this.mat.piedra);
-    vest.rotation.x = -Math.PI / 2; vest.position.set(0, 0.003, (zv + PLANO.z1) / 2);
-    const base = new THREE.Mesh(geoCaja(ANCHO + 0.6, 0.4, FONDO + 0.6, 0, -0.2, 0), this.mat.concreto);
-    for (const o of [sala1, vest]) o.receiveShadow = true;
-    this.pisos[1].add(base, sala1, vest);
+    const E = PLANO.escalera, zv = PLANO.vestibuloZ;
+    const { x0, x1, z0, z1 } = PLANO;
+    const hueco = rect(E.x0, E.x1, E.z0, E.z1);
 
-    // --- losa del piso 2 con el hueco de la escalera
-    const forma = new THREE.Shape();
-    forma.moveTo(PLANO.x0, PLANO.z0); forma.lineTo(PLANO.x1, PLANO.z0); forma.lineTo(PLANO.x1, PLANO.z1); forma.lineTo(PLANO.x0, PLANO.z1); forma.lineTo(PLANO.x0, PLANO.z0);
-    const hueco = new THREE.Path();
-    hueco.moveTo(E.x0, E.z0); hueco.lineTo(E.x0, E.z1); hueco.lineTo(E.x1, E.z1); hueco.lineTo(E.x1, E.z0); hueco.lineTo(E.x0, E.z0);
-    forma.holes.push(hueco);
+    // --- piso 1: parquet en la sala y piedra en el vestíbulo, con el hueco de la escalera que baja
+    const sala1 = new THREE.Mesh(geoSuelo([[x0, z0], [x1, z0], [x1, zv], [E.x1, zv], [E.x1, E.z0], [E.x0, E.z0], [E.x0, zv], [x0, zv]], { x0, z0, w: ANCHO, d: FONDO }), this.mat.parquet);
+    sala1.position.y = 0.002;
+    const vest = new THREE.Mesh(geoSuelo([[x0, zv], [E.x0, zv], [E.x0, E.z1], [E.x1, E.z1], [E.x1, zv], [x1, zv], [x1, z1], [x0, z1]], { x0, z0: zv, w: ANCHO, d: z1 - zv }), this.mat.piedra);
+    vest.position.y = 0.003;
+    // losa (solo los cantos: arriba va el piso y abajo el cielo raso del sótano)
+    const forma = new THREE.Shape(rect(x0, x1, z0, z1).map(([x, z]) => new THREE.Vector2(x, z)));
+    forma.holes.push(new THREE.Path(hueco.map(([x, z]) => new THREE.Vector2(x, z))));
     const losaGeo = new THREE.ExtrudeGeometry(forma, { depth: 0.3, bevelEnabled: false });
-    losaGeo.rotateX(Math.PI / 2);           // el plano xy pasa a xz; la extrusión baja en -y
-    const losa = new THREE.Mesh(losaGeo, [this.mat.parquet, this.mat.losa]);
-    losa.position.y = H;
-    // la ExtrudeGeometry usa UV en metros: se ajusta la escala del parquet
-    const uv = losaGeo.attributes.uv;
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 4, uv.getY(i) / 4);
-    const parquet2 = this.mat.parquet.clone();
-    for (const k of ['map', 'normalMap', 'roughnessMap']) { parquet2[k] = this.mat.parquet[k].clone(); parquet2[k].repeat.set(1, 1); parquet2[k].needsUpdate = true; }
-    losa.material = [parquet2, this.mat.losa];
-    losa.receiveShadow = true;
-    // cielo raso del piso 1 (bajo la losa)
-    const cielo1 = new THREE.Mesh(new THREE.ShapeGeometry(forma), this.mat.techo);
-    cielo1.rotation.x = Math.PI / 2; cielo1.position.y = H - 0.31;
-    this.pisos[2].add(losa, cielo1);
+    losaGeo.rotateX(Math.PI / 2);           // el plano xy pasa a xz; la extrusión baja en −y
+    losaGeo.groups = losaGeo.groups.filter((g) => g.materialIndex === 1);
+    const losa = new THREE.Mesh(losaGeo, [this.mat.losa, this.mat.losa]);
+    const cieloS = new THREE.Mesh(new THREE.ShapeGeometry(forma), this.mat.techo);
+    cieloS.rotation.x = Math.PI / 2; cieloS.position.y = cieloDe(2);
+    for (const o of [sala1, vest]) o.receiveShadow = true;
+    this.pisos[1].add(losa, sala1, vest, cieloS);
 
-    // --- techo (cubierta)
+    // --- muros del piso 1: fondo e izquierda (con franja de ventanas altas al fondo) y muro cortina a la derecha
+    const fondo = new THREE.Mesh(geoCaja(ANCHO + 0.6, H * 0.62, 0.3, 0, H * 0.31, z0 - 0.15), this.mat.yeso);
+    const fondoAlto = new THREE.Mesh(geoCaja(ANCHO + 0.6, H * 0.12, 0.3, 0, H * 0.94, z0 - 0.15), this.mat.yeso);
+    const izq = new THREE.Mesh(geoCaja(0.3, H, FONDO, x0 - 0.15, H / 2, 0), this.mat.yeso);
+    const franja = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO, H * 0.26), this.mat.vidrio);
+    franja.position.set(0, H * 0.75, z0 - 0.05);
+    const vid1 = new THREE.Mesh(new THREE.PlaneGeometry(FONDO, H), this.mat.vidrio);
+    vid1.position.set(x1, H / 2, 0); vid1.rotation.y = Math.PI / 2;
+    this.pisos[1].add(fondo, fondoAlto, izq, franja, vid1);
+    const montantes1 = [], montantesA = [];
+    for (let z = z0; z <= z1 + 0.01; z += FONDO / 10) montantes1.push([x1, H / 2, z, 0.12, H, 0.12]);
+    montantes1.push([x1, 0.06, 0, 0.14, 0.12, FONDO], [x1, H - 0.06, 0, 0.14, 0.12, FONDO], [x1, 1.1, 0, 0.1, 0.06, FONDO]);
+
+    // --- sótano: parquet, muros de contención (concreto) con acabado de yeso, contrazócalo de madera y rejillas
+    const salaS = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO, FONDO), this.mat.parquet);
+    salaS.rotation.x = -Math.PI / 2; salaS.position.y = Y2 + 0.002;
+    salaS.receiveShadow = true;
+    const e = 0.35, yb = Y2 - 0.3, yt = -0.012;
+    const contencion = new THREE.Mesh(mergeGeometries([
+      geoCajaL(x0 - e, x1 + e, yb, yt, z0 - e, z0), geoCajaL(x0 - e, x1 + e, yb, yt, z1, z1 + e),
+      geoCajaL(x0 - e, x0, yb, yt, z0, z1), geoCajaL(x1, x1 + e, yb, yt, z0, z1),
+    ]), this.mat.concreto);
+    const hS = cieloDe(2) - Y2, yM = (Y2 + cieloDe(2)) / 2;
+    const caras = [
+      new THREE.PlaneGeometry(ANCHO, hS).translate(0, yM, z0 + 0.005),
+      new THREE.PlaneGeometry(ANCHO, hS).rotateY(Math.PI).translate(0, yM, z1 - 0.005),
+      new THREE.PlaneGeometry(FONDO, hS).rotateY(Math.PI / 2).translate(x0 + 0.005, yM, 0),
+      new THREE.PlaneGeometry(FONDO, hS).rotateY(-Math.PI / 2).translate(x1 - 0.005, yM, 0),
+    ];
+    const acabado = new THREE.Mesh(mergeGeometries(caras), this.mat.yeso);
+    // contrazócalo de madera (1 m) con remate de aluminio, alrededor de la sala
+    const zoc = [], remate = [];
+    const t = 0.03, hz = 1.0;
+    zoc.push(geoCajaL(x0, x1, Y2, Y2 + hz, z0, z0 + t), geoCajaL(x0, x1, Y2, Y2 + hz, z1 - t, z1), geoCajaL(x0, x0 + t, Y2, Y2 + hz, z0, z1), geoCajaL(x1 - t, x1, Y2, Y2 + hz, z0, z1));
+    remate.push(geoCajaL(x0, x1, Y2 + hz, Y2 + hz + 0.03, z0, z0 + t + 0.01), geoCajaL(x0, x1, Y2 + hz, Y2 + hz + 0.03, z1 - t - 0.01, z1),
+      geoCajaL(x0, x0 + t + 0.01, Y2 + hz, Y2 + hz + 0.03, z0, z1), geoCajaL(x1 - t - 0.01, x1, Y2 + hz, Y2 + hz + 0.03, z0, z1));
+    const madera = new THREE.MeshStandardMaterial({ color: 0xa57c55, roughness: 0.58 });
+    // rejillas de ventilación arriba (un sótano se ventila con extracción mecánica)
+    const rej = [];
+    const yr = cieloDe(2) - 0.35;
+    for (let x = x0 + 3; x < x1 - 2; x += 6) { rej.push(geoCajaL(x - 0.45, x + 0.45, yr - 0.14, yr + 0.14, z0, z0 + 0.03)); }
+    for (let z = z0 + 3; z < z1 - 2; z += 6) { rej.push(geoCajaL(x1 - 0.03, x1, yr - 0.14, yr + 0.14, z - 0.45, z + 0.45)); }
+    const rejTex = lienzoTex(64, 64, (ctx, w, h) => { ctx.fillStyle = '#b9bec3'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = '#4a4f55'; for (let k = 0; k < 6; k++) ctx.fillRect(4, 5 + k * 9.6, w - 8, 4.6); });
+    const rejMat = new THREE.MeshStandardMaterial({ map: rejTex, roughness: 0.5, metalness: 0.3 });
+    // extintores (rojos, con su cartel) en las esquinas
+    const rojo = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.45 });
+    const ext = [[x1 - 0.2, 11.5, -Math.PI / 2], [x0 + 0.2, -12.0, Math.PI / 2]].map(([x, z]) => new THREE.CylinderGeometry(0.09, 0.09, 0.55, 14).translate(x, Y2 + 0.85, z));
+    this.pisos[2].add(salaS, contencion, acabado, new THREE.Mesh(mergeGeometries(zoc), madera), new THREE.Mesh(mergeGeometries(remate), this.mat.metal),
+      new THREE.Mesh(mergeGeometries(rej), rejMat), new THREE.Mesh(mergeGeometries(ext), rojo));
+    // muro gráfico del fondo: SALA 2 · SÓTANO (sin ventanas, la sala se orienta con él)
+    const grafica = cartel(10, 1.25, 1600, (ctx, w, h) => {
+      ctx.fillStyle = '#1f3a6d'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(0, h * 0.86, w, h * 0.04);
+      texto(ctx, 'SALA 2 · SÓTANO', w * 0.5, h * 0.36, { tam: h * 0.38, peso: 800 });
+      texto(ctx, 'Colección 600–999 · Hemeroteca · Zona de silencio y trabajo en grupo', w * 0.5, h * 0.72, { tam: h * 0.15, peso: 500, color: '#dbeafe', max: w * 0.94 });
+    });
+    grafica.position.set(1.5, Y2 + 3.05, z0 + 0.02);
+    this.pisos[2].add(grafica);
+
+    // --- encima del piso 1: su cielo raso (losa) y los pisos altos del Pabellón C, con ventanas de franjas
+    const losaA = new THREE.Mesh(geoCaja(ANCHO, 0.3, FONDO, 0, H - 0.15, 0), this.mat.techo);
+    const yA = H, altoA = HS + 0.45;
+    const murosA = [
+      geoCaja(ANCHO + 0.6, altoA, 0.3, 0, yA + altoA / 2, z0 - 0.15),
+      geoCaja(0.3, altoA, FONDO, x0 - 0.15, yA + altoA / 2, 0),
+    ];
+    for (let z = z0; z <= z1 + 0.01; z += FONDO / 10) montantesA.push([x1, yA + altoA / 2, z, 0.12, altoA, 0.12]);
+    montantesA.push([x1, yA + 0.06, 0, 0.14, 0.12, FONDO], [x1, yA + altoA - 0.06, 0, 0.14, 0.12, FONDO], [x1, yA + 1.1, 0, 0.1, 0.06, FONDO]);
+    const vidA = [new THREE.PlaneGeometry(FONDO, altoA).rotateY(Math.PI / 2).translate(x1, yA + altoA / 2, 0)];
+    // fachada hacia la galería: franja de ventanas entre muros grises
+    const v0 = yA + 1.7, v1 = yA + 3.4;
+    for (let x = x0; x <= x1 + 0.01; x += ANCHO / 14) montantesA.push([x, (v0 + v1) / 2, z1, 0.1, v1 - v0, 0.1]);
+    montantesA.push([0, v0, z1, ANCHO, 0.08, 0.12], [0, v1, z1, ANCHO, 0.08, 0.12]);
+    vidA.push(new THREE.PlaneGeometry(ANCHO, v1 - v0).translate(0, (v0 + v1) / 2, z1));
+    const muroG = new THREE.MeshStandardMaterial({ color: 0xb3b5b6, roughness: 0.9 });
+    // borde de la losa visible en la fachada y a la derecha
+    montantesA.push([0, H - 0.15, z1 + 0.05, ANCHO + 0.6, 0.6, 0.3], [x1 + 0.05, H - 0.15, 0, 0.3, 0.6, FONDO + 0.6]);
     const cubierta = new THREE.Mesh(geoCaja(ANCHO + 0.6, 0.45, FONDO + 0.6, 0, H + HS + 0.225, 0), this.mat.concreto);
-    const cielo2 = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO, FONDO), this.mat.techo);
-    cielo2.rotation.x = Math.PI / 2; cielo2.position.y = H + HS - 0.001;
-    this.techo.add(cubierta, cielo2);
-
-    // --- muros sólidos: fondo e izquierda (con franja de ventanas altas al fondo)
-    for (const piso of [1, 2]) {
-      const y0 = yPiso(piso), g = this.pisos[piso];
-      const alto = piso === 1 ? H : HS;
-      const fondo = new THREE.Mesh(geoCaja(ANCHO + 0.6, alto * 0.62, 0.3, 0, y0 + alto * 0.31, PLANO.z0 - 0.15), this.mat.yeso);
-      const fondoAlto = new THREE.Mesh(geoCaja(ANCHO + 0.6, alto * 0.12, 0.3, 0, y0 + alto * 0.94, PLANO.z0 - 0.15), this.mat.yeso);
-      const izq = new THREE.Mesh(geoCaja(0.3, alto, FONDO, PLANO.x0 - 0.15, y0 + alto / 2, 0), this.mat.yeso);
-      g.add(fondo, fondoAlto, izq);
-      // vidrio de la franja alta del fondo
-      const franja = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO, alto * 0.26), this.mat.vidrio);
-      franja.position.set(0, y0 + alto * 0.75, PLANO.z0 - 0.05);
-      g.add(franja);
-    }
-
-    // --- muros cortina de vidrio: derecha y fachada (con montantes por instancias)
-    const montantes = [];
-    const vidrios = [];
-    for (const piso of [1, 2]) {
-      const y0 = yPiso(piso), alto = piso === 1 ? H : HS + 0.45;
-      // derecha
-      for (let z = PLANO.z0; z <= PLANO.z1 + 0.01; z += FONDO / 10) montantes.push([PLANO.x1, y0 + alto / 2, z, 0.12, alto, 0.12]);
-      montantes.push([PLANO.x1, y0 + 0.06, 0, 0.14, 0.12, FONDO], [PLANO.x1, y0 + alto - 0.06, 0, 0.14, 0.12, FONDO], [PLANO.x1, y0 + 1.1, 0, 0.1, 0.06, FONDO]);
-      vidrios.push({ x: PLANO.x1, y: y0 + alto / 2, z: 0, w: FONDO, h: alto, ry: Math.PI / 2, piso });
-      // fachada del piso 2 hacia la galería: franja de ventanas entre muros grises (la del piso 1 es la vitrina de la galería)
-      if (piso === 2) {
-        const v0 = y0 + 1.7, v1 = y0 + 3.4;
-        for (let x = PLANO.x0; x <= PLANO.x1 + 0.01; x += ANCHO / 14) montantes.push([x, (v0 + v1) / 2, PLANO.z1, 0.1, v1 - v0, 0.1]);
-        montantes.push([0, v0, PLANO.z1, ANCHO, 0.08, 0.12], [0, v1, PLANO.z1, ANCHO, 0.08, 0.12]);
-        vidrios.push({ x: 0, y: (v0 + v1) / 2, z: PLANO.z1, w: ANCHO, h: v1 - v0, ry: 0, piso });
-        const muroG = new THREE.MeshStandardMaterial({ color: 0xb3b5b6, roughness: 0.9 });
-        this.pisos[2].add(new THREE.Mesh(mergeGeometries([geoCaja(ANCHO + 0.6, v0 - y0, 0.3, 0, (y0 + v0) / 2, PLANO.z1 + 0.15), geoCaja(ANCHO + 0.6, y0 + alto - v1, 0.3, 0, (v1 + y0 + alto) / 2, PLANO.z1 + 0.15)]), muroG));
-      }
-    }
-    // borde de losa visible en fachada
-    montantes.push([0, H - 0.15, PLANO.z1 + 0.05, ANCHO + 0.6, 0.6, 0.3], [PLANO.x1 + 0.05, H - 0.15, 0, 0.3, 0.6, FONDO + 0.6]);
+    this.techo.add(losaA, new THREE.Mesh(mergeGeometries(murosA), this.mat.yeso), cubierta,
+      new THREE.Mesh(mergeGeometries([geoCaja(ANCHO + 0.6, v0 - yA, 0.3, 0, (yA + v0) / 2, z1 + 0.15), geoCaja(ANCHO + 0.6, yA + altoA - v1, 0.3, 0, (v1 + yA + altoA) / 2, z1 + 0.15)]), muroG),
+      new THREE.Mesh(mergeGeometries(vidA), this.galeria.m.franjas));
     const geoM = new THREE.BoxGeometry(1, 1, 1);
-    for (const piso of [1, 2]) {
-      const lista = montantes.filter((m) => (piso === 1 ? m[1] < H : m[1] >= H - 0.5));
+    const instancias = (lista) => {
       const inst = new THREE.InstancedMesh(geoM, this.mat.marco, lista.length);
       const mm = new THREE.Matrix4();
       lista.forEach(([x, y, z, w, h, d], i) => { mm.makeScale(w, h, d); mm.setPosition(x, y, z); inst.setMatrixAt(i, mm); });
-      this.pisos[piso].add(inst);
-    }
-    for (const v of vidrios) {
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(v.w, v.h), this.mat.vidrio);
-      p.position.set(v.x, v.y, v.z); p.rotation.y = v.ry;
-      this.pisos[v.piso].add(p);
-    }
+      return inst;
+    };
+    this.pisos[1].add(instancias(montantes1));
+    this.techo.add(instancias(montantesA));
     // pilares en las esquinas y a la derecha (adelante están las columnas redondas de la galería)
     const pilares = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, H + HS + 0.45, 0.5), this.mat.concreto, 6);
     const mm = new THREE.Matrix4();
-    [[PLANO.x0, PLANO.z1], [PLANO.x1, PLANO.z1], [PLANO.x1, PLANO.z0], [PLANO.x0, PLANO.z0], [PLANO.x1, 0], [PLANO.x0, 0]].forEach(([x, z], i) => {
+    [[x0, z1], [x1, z1], [x1, z0], [x0, z0], [x1, 0], [x0, 0]].forEach(([x, z], i) => {
       mm.makeTranslation(x, (H + HS + 0.45) / 2, z); pilares.setMatrixAt(i, mm);
     });
     this.techo.add(pilares);
   }
 
-  // ---------------------------------------------------------------- escalera en U
+  // ---------------------------------------------------------------- escalera en U que baja al sótano
+  // Tramo 1: del piso 1 (z 12,4) al descanso (−2,25 m) · tramo 2: del descanso al sótano (−4,5 m, z 12,4)
   #escalera() {
-    const E = PLANO.escalera;
-    const partes = [];
+    const E = PLANO.escalera, t1 = E.tramo1, t2 = E.tramo2, R = E.rellano;
+    const baja = -Y2 / 2;                    // cada tramo baja 2,25 m
     const pasos = 13;
-    const tramo = (t, subeHaciaMenosZ, y0) => {
-      const largo = Math.abs(t.zAbajo - t.zArriba);
-      const huella = largo / pasos, contra = (H / 2) / pasos;
-      const ancho = t.x1 - t.x0, cx = (t.x0 + t.x1) / 2;
+    const partes = [];
+    // peldaños de zAbajo (lado del piso 1) a zArriba (lado del sótano): la huella k a la altura del recorrido
+    const narices = [];                      // banda antideslizante oscura en el borde de cada peldaño
+    const tramo = (t, yIni, base) => {
+      const largo = Math.abs(t.zAbajo - t.zArriba), dir = Math.sign(t.zArriba - t.zAbajo);
+      const huella = largo / pasos, contra = baja / pasos;
       for (let k = 0; k < pasos; k++) {
-        const z = subeHaciaMenosZ ? t.zAbajo - (k + 0.5) * huella : t.zAbajo + (k + 0.5) * huella;
-        partes.push(geoCaja(ancho, contra * (k + 1), huella, cx, y0 + (contra * (k + 1)) / 2, z));
+        const zc = t.zAbajo + dir * (k + 0.5) * huella, yH = yIni - (k + 0.5) * contra;
+        partes.push(geoCajaL(t.x0, t.x1, base, yH, zc - huella / 2, zc + huella / 2));
+        const zb = zc + dir * huella / 2;    // borde hacia el peldaño de abajo
+        narices.push(geoCajaL(t.x0 + 0.06, t.x1 - 0.06, yH - 0.004, yH + 0.006, Math.min(zb, zb - dir * 0.07), Math.max(zb, zb - dir * 0.07)));
       }
     };
-    tramo(E.tramo1, true, 0);
-    tramo(E.tramo2, false, H / 2);
-    const R = E.rellano;
-    partes.push(geoCaja(R.x1 - R.x0, 0.25, R.z1 - R.z0, (R.x0 + R.x1) / 2, H / 2 - 0.125, (R.z0 + R.z1) / 2));
-    // columnas bajo el rellano
-    partes.push(geoCaja(0.3, H / 2, 0.3, R.x0 + 0.3, H / 4, R.z0 + 0.3), geoCaja(0.3, H / 2, 0.3, R.x1 - 0.3, H / 4, R.z0 + 0.3));
+    tramo(t1, 0, -baja - 0.25);              // el tramo de arriba vuela sobre el sótano (bajo él hay 2 m libres)
+    tramo(t2, -baja, Y2);                    // el de abajo apoya en el piso del sótano
+    partes.push(geoCajaL(R.x0, R.x1, -baja - 0.25, -baja, R.z0, R.z1));
+    // columnas bajo el descanso
+    partes.push(geoCajaL(R.x0 + 0.15, R.x0 + 0.45, Y2, -baja - 0.25, R.z0 + 0.15, R.z0 + 0.45), geoCajaL(R.x1 - 0.45, R.x1 - 0.15, Y2, -baja - 0.25, R.z0 + 0.15, R.z0 + 0.45));
     const escalera = new THREE.Mesh(mergeGeometries(partes), new THREE.MeshStandardMaterial({ color: 0xd6d2c8, roughness: 0.7 }));
     escalera.receiveShadow = true; escalera.castShadow = true;
-    this.pisos[1].add(escalera);
-    // barandas de vidrio de la escalera y del hueco en el piso 2
-    const barandas = [];
-    const t1 = E.tramo1, t2 = E.tramo2;
-    const run1 = Math.abs(t1.zAbajo - t1.zArriba), run2 = Math.abs(t2.zArriba - t2.zAbajo);
-    // panel girado sobre su normal para seguir la pendiente (tramo 1 sube hacia -z, tramo 2 hacia +z)
-    barandas.push({ x: t1.x1 + 0.03, z: (t1.zAbajo + t1.zArriba) / 2, y: H / 4 + 0.5, w: Math.hypot(run1, H / 2), pend: Math.atan2(H / 2, run1) });
-    barandas.push({ x: t2.x0 - 0.03, z: (t2.zAbajo + t2.zArriba) / 2, y: H * 0.75 + 0.5, w: Math.hypot(run2, H / 2), pend: -Math.atan2(H / 2, run2) });
+    this.pisos[2].add(escalera, new THREE.Mesh(mergeGeometries(narices), new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.6 })));
+    // barandas de vidrio: a los lados de los tramos (siguiendo la pendiente) y en los bordes del descanso
     const vidrioBaranda = new THREE.MeshStandardMaterial({ color: 0xcfe8f5, transparent: true, opacity: 0.28, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide });
-    for (const b of barandas) {
+    const run1 = Math.abs(t1.zAbajo - t1.zArriba), run2 = Math.abs(t2.zArriba - t2.zAbajo);
+    const p1 = -Math.atan2(baja, run1), p2 = Math.atan2(baja, run2);   // el tramo 1 baja hacia −z; el 2, hacia +z
+    const inclinadas = [
+      { x: t1.x1 + 0.03, z: (t1.zAbajo + t1.zArriba) / 2, y: -baja / 2 + 0.5, w: Math.hypot(run1, baja), pend: p1 },
+      { x: t2.x0 - 0.03, z: (t2.zAbajo + t2.zArriba) / 2, y: -baja * 1.5 + 0.5, w: Math.hypot(run2, baja), pend: p2 },
+      { x: t2.x1 + 0.03, z: (t2.zAbajo + t2.zArriba) / 2, y: -baja * 1.5 + 0.5, w: Math.hypot(run2, baja), pend: p2 },
+    ];
+    for (const b of inclinadas) {
       const p = new THREE.Mesh(new THREE.PlaneGeometry(b.w, 1.0), vidrioBaranda);
       p.position.set(b.x, b.y, b.z); p.rotation.set(0, Math.PI / 2, b.pend, 'YXZ');
-      this.pisos[1].add(p);
+      this.pisos[2].add(p);
     }
-    // hueco en el piso 2: baranda en el fondo y a la derecha
-    const y2 = H + 0.5;
-    const hFondo = new THREE.Mesh(new THREE.PlaneGeometry(E.x1 - E.x0, 1.0), vidrioBaranda);
-    hFondo.position.set((E.x0 + E.x1) / 2, y2, E.z0);
-    const hDer = new THREE.Mesh(new THREE.PlaneGeometry(E.z1 - E.z0, 1.0), vidrioBaranda);
-    hDer.position.set(E.x1, y2, (E.z0 + E.z1) / 2); hDer.rotation.y = Math.PI / 2;
-    const hFrente = new THREE.Mesh(new THREE.PlaneGeometry(t2.x0 - E.x0, 1.0), vidrioBaranda);
-    hFrente.position.set((E.x0 + t2.x0) / 2, y2, E.z1);
-    const pasamanos = new THREE.Mesh(mergeGeometries([
-      geoCaja(E.x1 - E.x0, 0.05, 0.06, (E.x0 + E.x1) / 2, H + 1.02, E.z0),
-      geoCaja(0.06, 0.05, E.z1 - E.z0, E.x1, H + 1.02, (E.z0 + E.z1) / 2),
-      geoCaja(t2.x0 - E.x0, 0.05, 0.06, (E.x0 + t2.x0) / 2, H + 1.02, E.z1),
+    const yD = -baja + 0.5;
+    const dFondo = new THREE.Mesh(new THREE.PlaneGeometry(R.x1 - R.x0, 1.0), vidrioBaranda);
+    dFondo.position.set((R.x0 + R.x1) / 2, yD, R.z0);
+    const dDer = new THREE.Mesh(new THREE.PlaneGeometry(R.z1 - R.z0, 1.0), vidrioBaranda);
+    dDer.position.set(R.x1 + 0.03, yD, (R.z0 + R.z1) / 2); dDer.rotation.y = Math.PI / 2;
+    const dOjo = new THREE.Mesh(new THREE.PlaneGeometry(t2.x0 - t1.x1, 1.0), vidrioBaranda);
+    dOjo.position.set((t1.x1 + t2.x0) / 2, yD, R.z1);
+    const pasD = new THREE.Mesh(mergeGeometries([
+      geoCaja(R.x1 - R.x0, 0.05, 0.06, (R.x0 + R.x1) / 2, -baja + 1.02, R.z0),
+      geoCaja(0.06, 0.05, R.z1 - R.z0, R.x1 + 0.03, -baja + 1.02, (R.z0 + R.z1) / 2),
+      geoCaja(t2.x0 - t1.x1, 0.05, 0.06, (t1.x1 + t2.x0) / 2, -baja + 1.02, R.z1),
     ]), this.mat.metal);
-    this.pisos[2].add(hFondo, hDer, hFrente, pasamanos);
-    // cartel orientado hacia el vestíbulo (+x)
-    const cartel = etiqueta('↑ Escalera · Piso 2 · Sala 2', { alto: 0.26, color: '#f8fafc', fondo: 'rgba(15,23,42,0.85)', tamFuente: 60 });
-    cartel.position.set(-16.15, 2.5, 10.6); cartel.rotation.y = Math.PI / 2;
-    this.pisos[1].add(cartel);
+    this.pisos[2].add(dFondo, dDer, dOjo, pasD);
+    // hueco en el piso 1: baranda al fondo, a la derecha y al frente (salvo la boca del tramo 1)
+    const yH = 0.5;
+    const hFondo = new THREE.Mesh(new THREE.PlaneGeometry(E.x1 - E.x0, 1.0), vidrioBaranda);
+    hFondo.position.set((E.x0 + E.x1) / 2, yH, E.z0);
+    const hDer = new THREE.Mesh(new THREE.PlaneGeometry(E.z1 - E.z0, 1.0), vidrioBaranda);
+    hDer.position.set(E.x1, yH, (E.z0 + E.z1) / 2); hDer.rotation.y = Math.PI / 2;
+    const hFrente = new THREE.Mesh(new THREE.PlaneGeometry(E.x1 - t1.x1, 1.0), vidrioBaranda);
+    hFrente.position.set((t1.x1 + E.x1) / 2, yH, E.z1);
+    const pasamanos = new THREE.Mesh(mergeGeometries([
+      geoCaja(E.x1 - E.x0, 0.05, 0.06, (E.x0 + E.x1) / 2, 1.02, E.z0),
+      geoCaja(0.06, 0.05, E.z1 - E.z0, E.x1, 1.02, (E.z0 + E.z1) / 2),
+      geoCaja(E.x1 - t1.x1, 0.05, 0.06, (t1.x1 + E.x1) / 2, 1.02, E.z1),
+    ]), this.mat.metal);
+    this.pisos[1].add(hFondo, hDer, hFrente, pasamanos);
+    // carteles orientados hacia las salas (+x): en el piso 1 baja al sótano; en el sótano sube a la salida
+    const cartelP1 = etiqueta('↓ Escalera · Sótano · Sala 2', { alto: 0.26, color: '#f8fafc', fondo: 'rgba(15,23,42,0.85)', tamFuente: 60 });
+    cartelP1.position.set(-16.15, 2.5, 10.6); cartelP1.rotation.y = Math.PI / 2;
+    const cartelP1b = cartelP1.clone(); cartelP1b.rotation.y = -Math.PI / 2; cartelP1b.position.x -= 0.02;
+    this.pisos[1].add(cartelP1, cartelP1b);
+    const cartelS = etiqueta('↑ Escalera · Piso 1 · Salida', { alto: 0.26, color: '#f8fafc', fondo: 'rgba(15,23,42,0.85)', tamFuente: 60 });
+    cartelS.position.set(-16.15, Y2 + 2.9, 10.6); cartelS.rotation.y = Math.PI / 2;
+    const cartelSb = cartelS.clone(); cartelSb.rotation.y = -Math.PI / 2; cartelSb.position.x -= 0.02;
+    this.pisos[2].add(cartelS, cartelSb);
   }
 
   // ---------------------------------------------------------------- mesas, sillas, personas, cojines y halos
@@ -446,12 +519,12 @@ export class Biblioteca3D {
     for (const piso of [1, 2]) {
       const mesas = PLANO.mesas.filter((m) => m.piso === piso);
       const cams = new THREE.InstancedMesh(camGeo, new THREE.MeshStandardMaterial({ color: 0x111418, roughness: 0.5 }), mesas.length);
-      const yTecho = yPiso(piso) + (piso === 1 ? H - 0.31 : HS) - 0.31;
+      const yTecho = cieloDe(piso) - 0.31;
       const m4 = new THREE.Matrix4();
       mesas.forEach((m, i) => { m4.makeTranslation(m.x, yTecho, m.z); cams.setMatrixAt(i, m4); });
       cams.userData.esCamaras = true;
       this[`camaras${piso}`] = cams;
-      (piso === 1 ? this.pisos[2] : this.techo).add(cams);
+      (piso === 1 ? this.techo : this.pisos[1]).add(cams);
     }
   }
 
@@ -579,7 +652,7 @@ export class Biblioteca3D {
 
   // ---------------------------------------------------------------- señalética de zonas
   #senales() {
-    const y2 = H + HS - 0.55;
+    const y2 = cieloDe(2) - 0.55;
     const z1 = etiqueta('ZONA DE SILENCIO', { alto: 0.34, color: '#ccfbf1', fondo: 'rgba(15,60,58,0.9)', tamFuente: 72 });
     z1.position.set(-6.5, y2, 11.4);
     const z2 = etiqueta('TRABAJO EN GRUPO', { alto: 0.34, color: '#fef3c7', fondo: 'rgba(80,55,10,0.9)', tamFuente: 72 });
@@ -588,7 +661,7 @@ export class Biblioteca3D {
     // franjas de color en el piso para las zonas
     const zona = (x0, x1, color) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, 23.2), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.06, depthWrite: false }));
-      m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, H + 0.004, -1.0);
+      m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, Y2 + 0.004, -1.0);
       this.pisos[2].add(m);
     };
     zona(-16.2, 2.6, 0x14b8a6);
@@ -598,8 +671,8 @@ export class Biblioteca3D {
     s1.position.set(4, H - 0.85, 6.5);
     const s1b = s1.clone(); s1b.rotation.y = Math.PI; s1b.position.z -= 0.02;
     this.pisos[1].add(s1, s1b);
-    const s2 = etiqueta('SALA 2 · 236 asientos · colección 600–999 · hemeroteca', { alto: 0.24, color: '#f8fafc', fondo: 'rgba(31,58,109,0.92)', tamFuente: 72 });
-    s2.position.set(-11.5, H + HS - 0.7, 11.6);
+    const s2 = etiqueta('SALA 2 · sótano · 236 asientos · colección 600–999 · hemeroteca', { alto: 0.24, color: '#f8fafc', fondo: 'rgba(31,58,109,0.92)', tamFuente: 72 });
+    s2.position.set(-11.5, cieloDe(2) - 0.7, 11.6);
     const s2b = s2.clone(); s2b.rotation.y = Math.PI; s2b.position.z -= 0.02;
     this.pisos[2].add(s2, s2b);
   }
@@ -616,10 +689,10 @@ export class Biblioteca3D {
         pos.push([x, z]);
       }
       const inst = new THREE.InstancedMesh(geo, mat, pos.length);
-      const yT = piso === 1 ? H - 0.33 : H + HS - 0.025;
+      const yT = cieloDe(piso) - 0.02;
       const m4 = new THREE.Matrix4();
       pos.forEach(([x, z], i) => { m4.makeTranslation(x, yT, z); inst.setMatrixAt(i, m4); });
-      (piso === 1 ? this.pisos[2] : this.techo).add(inst);
+      (piso === 1 ? this.techo : this.pisos[1]).add(inst);
     }
   }
 
@@ -716,7 +789,7 @@ export class Biblioteca3D {
   marcarDestino(a) {
     if (!a) { this.baliza.visible = false; return; }
     this.baliza.visible = true;
-    this.baliza.position.set(a.x, yPiso(a.piso) + (a.piso === 2 ? this.explosion : 0), a.z);
+    this.baliza.position.set(a.x, yPiso(a.piso) + this.alzado(a.piso), a.z);
   }
 
   // ---------------------------------------------------------------- estado de los asientos
@@ -772,7 +845,8 @@ export class Biblioteca3D {
     for (const piso of [1, 2]) {
       if (!this.pisos[piso].visible) continue;
       const I = this[`inst${piso}`];
-      objetivos.push(I.sillas, I.cojines, this[`mesas${piso}`].tablero, this[`camaras${piso}`]);
+      objetivos.push(I.sillas, I.cojines, this[`mesas${piso}`].tablero);
+      if (visibleEnEscena(this[`camaras${piso}`])) objetivos.push(this[`camaras${piso}`]);
     }
     for (const clave of ['entrada', 'salida']) objetivos.push(this.puertasVis[clave].hojaIzq, this.puertasVis[clave].hojaDer);
     const hit = raycaster.intersectObjects(objetivos, false)[0];
@@ -789,13 +863,18 @@ export class Biblioteca3D {
     return null;
   }
 
-  // Vista "casa de muñecas": el piso 2 se eleva y se quita el techo
+  // Vista "casa de muñecas": el piso 1 (con su vitrina) se levanta, se quitan los pisos altos y se ve el sótano
   fijarExplosion(t) {
-    this.explosion = t * 7.5;
-    this.pisos[2].position.y = this.explosion;
-    this.techo.visible = t < 0.02;
+    this.explosion = t * ALZADO;
+    this.pisos[1].position.y = this.explosion;
+    this.galeria.frente.position.y = this.explosion;
+    this.techo.visible = t < 0.02 && !this.sinTecho;     // (la vista aérea lo quita aunque no haya casa de muñecas)
     this.galeria.desdeArriba(t >= 0.02 || !!this.galeriaArriba);
   }
+  // cuánto está levantado cada nivel (el piso 1 en la casa de muñecas; el sótano nunca)
+  alzado(piso) { return piso === 1 ? this.explosion : 0; }
+  // mostrar u ocultar el piso 1 con su vitrina (para ver el sótano desde arriba)
+  verPiso1(v) { this.pisos[1].visible = v; this.galeria.frente.visible = v; }
 
   // vista aérea: sin el techo alto de la galería (para ver a quienes llegan)
   verGaleriaDesdeArriba(v) { this.galeriaArriba = v; this.galeria.desdeArriba(v || this.explosion > 0.15); }
@@ -835,7 +914,7 @@ export class Biblioteca3D {
   }
 }
 
-// Tótem de la entrada: personas dentro y asientos libres por piso
+// Tótem de la entrada: personas dentro y asientos libres en el piso 1 y en el sótano
 export function dibujarTotem(ctx, w, h, { estado, fuente, hora }) {
   ctx.fillStyle = '#0b1220'; ctx.fillRect(0, 0, w, h);
   const g = ctx.createLinearGradient(0, 0, 0, h * 0.3);
@@ -852,7 +931,7 @@ export function dibujarTotem(ctx, w, h, { estado, fuente, hora }) {
     rectRedondo(ctx, w * 0.07, y, w * 0.86, h * 0.22, w * 0.04); ctx.fill();
     ctx.textAlign = 'left';
     ctx.fillStyle = '#e2e8f0'; ctx.font = `700 ${w * 0.06}px ${FUENTE}`;
-    ctx.fillText(`Piso ${n} · Sala ${n}`, w * 0.12, y + h * 0.06);
+    ctx.fillText(n === 1 ? 'Piso 1 · Sala 1' : 'Sótano · Sala 2', w * 0.12, y + h * 0.06);
     ctx.fillStyle = libres > 0 ? '#22c55e' : '#ef4444'; ctx.font = `800 ${w * 0.16}px ${FUENTE}`;
     ctx.fillText(String(libres), w * 0.12, y + h * 0.165);
     ctx.fillStyle = '#94a3b8'; ctx.font = `600 ${w * 0.05}px ${FUENTE}`;
@@ -862,8 +941,8 @@ export function dibujarTotem(ctx, w, h, { estado, fuente, hora }) {
     ctx.fillStyle = fr > 0.9 ? '#ef4444' : fr > 0.75 ? '#f59e0b' : '#22c55e';
     rectRedondo(ctx, w * 0.12, y + h * 0.19, w * 0.76 * fr, h * 0.014, h * 0.007); ctx.fill();
   };
-  piso(2, h * 0.17);
-  piso(1, h * 0.42);
+  piso(1, h * 0.17);
+  piso(2, h * 0.42);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#94a3b8'; ctx.font = `600 ${w * 0.045}px ${FUENTE}`;
   ctx.fillText('Personas dentro', w / 2, h * 0.72);

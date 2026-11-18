@@ -1,6 +1,6 @@
 # Simulación para presentación
 
-Sección extra de BiblioAforo VR (`#/presentacion`). Usa la misma biblioteca, gente y gráficos de **Hora punta**, pero con los **dos pisos llenos**: la única mesa con sitio es la **mesa piloto 1-01**, con **2 de sus 4 sillas libres**. La persona se pone el Meta Quest 3, camina de verdad hacia el sensor S1; cuando el **sensor real** la detecta, en el simulador también entra. Luego va a la mesa piloto, elige una silla libre, se sienta y se queda.
+Sección extra de BiblioAforo VR (`#/presentacion`). Usa la misma biblioteca, gente y gráficos de **Hora punta**, pero con el **piso 1 y el sótano llenos**: la única mesa con sitio es la **mesa piloto 1-01**, con **2 de sus 4 sillas libres**. La persona se pone el Meta Quest 3, camina de verdad hacia el sensor S1; cuando el **sensor real** la detecta, en el simulador también entra. Luego va a la mesa piloto, elige una silla libre, se sienta y se queda.
 
 No cambia las otras experiencias: solo se registró en la lista de experiencias (`src/app.js`) y en el menú (`src/juego/menu.js`, tarjeta «Sección extra», tecla `6`). Todo lo que ajusta al entrar (mundo lleno, mesa piloto, tótem) lo deshace al salir.
 
@@ -32,7 +32,7 @@ ESP32 / Arduino ──USB──► laptop (Chrome/Edge, Web Serial, solo lectura
 
 | Estado | Pasa a… cuando |
 | --- | --- |
-| Inicialización | Se arma el mundo (dos pisos llenos, mesa piloto con A y B ocupadas, C y D libres). |
+| Inicialización | Se arma el mundo (piso 1 y sótano llenos, mesa piloto con A y B ocupadas, C y D libres). |
 | Calibración (solo visor) | A: calibración rápida · gatillo + A: calibración precisa. |
 | Usuario a 2 metros | La cabeza está a ≥ 1,7 m del sensor. |
 | Caminando hacia la entrada | La cabeza está a < 1,7 m (vuelve a «a 2 metros» si se aleja a > 1,88 m). |

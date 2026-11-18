@@ -2,7 +2,7 @@
 // Todo es consecuencia del sistema: al cruzar la puerta, el sensor S1 te cuenta; los demás estudiantes
 // también buscan asiento; si alguien ocupa el tuyo antes de que llegues, la cámara de esa mesa lo
 // detecta, el asiento se pone rojo y la app te lleva al libre más cercano.
-import { PLANO, ruta, rutaLlegada, alturaSuelo, accesoAsiento, NOMBRE_ZONA, PUNTOS, yPiso, caminoGaleria } from '../biblioteca/plano.js';
+import { PLANO, ruta, rutaLlegada, alturaSuelo, accesoAsiento, NOMBRE_ZONA, PUNTOS, yPiso, caminoGaleria, nivelDe, NivelDe } from '../biblioteca/plano.js';
 import { camposDesde, distanciaAsiento } from '../biblioteca/recomendador.js';
 import { describirObjeto } from './jugador.js';
 import * as H from './hudJuego.js';
@@ -201,7 +201,7 @@ export class HoraPunta {
     this.#calcularRuta();
     this.#programarRival();
     this.sinAsientos = false;
-    if (!automatico) H.banner(`Vas al asiento ${a.id}`, 'info', `${NOMBRE_ZONA[a.zona]} · piso ${a.piso}${a.enchufe ? ' · con enchufe' : ''}${a.ventana ? ' · junto a la ventana' : ''} · ${Math.round(this.rutaMetros)} m`, 2400);
+    if (!automatico) H.banner(`Vas al asiento ${a.id}`, 'info', `${NOMBRE_ZONA[a.zona]} · ${nivelDe(a.piso)}${a.enchufe ? ' · con enchufe' : ''}${a.ventana ? ' · junto a la ventana' : ''} · ${Math.round(this.rutaMetros)} m`, 2400);
     this.app.mapaJuego.marcar({ elegido: a.id, ruta: this.rutaPts });
     this.#pintarObjetivo(true);
     return true;
@@ -253,14 +253,17 @@ export class HoraPunta {
     const p = this.j.pos;
     const E = PLANO.escalera;
     const yS = alturaSuelo(p.x, p.z, this.j.nivel);
-    const enEscalera = p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 && yS > 0.15 && yS < PLANO.alturaPiso - 0.15;
+    const enEscalera = p.x > E.x0 && p.x < E.x1 && p.z > E.z0 && p.z < E.z1 && yS < yPiso(1) - 0.15 && yS > yPiso(2) + 0.15;
     if (enEscalera && this.rutaPts) return;                      // en la escalera se mantiene la ruta
     let pts;
     if (this.fase === 'saliendo') {
       if (p.z > PLANO.z1 - 0.3) pts = [{ x: p.x, y: 0, z: p.z }, { x: XS, y: 0, z: PLANO.z1 + 3 }];
       else pts = [...ruta(p, PUNTOS.salidaInterior).pts, { x: XS, y: 0, z: PLANO.z1 + 1.2 }, { x: XS, y: 0, z: PLANO.z1 + 3 }];
     } else if (p.z > PLANO.z1 - 0.3) {
-      pts = [...caminoGaleria(p, XP), ...rutaLlegada(null, a)];
+      const llegada = rutaLlegada(null, a);
+      // ya en el umbral de la puerta: la cinta sigue hacia adentro (no vuelve al punto de llegada)
+      const k = llegada.findIndex((q) => q.z < p.z - 0.05);
+      pts = p.z < PLANO.z1 + 1.3 && k > 0 ? [{ x: p.x, y: 0, z: p.z }, ...llegada.slice(k)] : [...caminoGaleria(p, XP), ...llegada];
     } else {
       pts = ruta(p, a, { asiento: a }).pts;
     }
@@ -305,7 +308,7 @@ export class HoraPunta {
     if (ahora === 'libre' && this.sinAsientos && !this.objetivo) {
       this.sinAsientos = false;
       this.son.seleccion();
-      H.banner(`¡Se liberó el asiento ${a.id}!`, 'ok', `Piso ${a.piso} · pulsa F para ir al más cercano.`, 3800);
+      H.banner(`¡Se liberó el asiento ${a.id}!`, 'ok', `${NivelDe(a.piso)} · pulsa F para ir al más cercano.`, 3800);
       return;
     }
     if (!this.objetivo || a.id !== this.objetivo.id || ahora === 'libre' || a.estudiante) return;
@@ -349,7 +352,7 @@ export class HoraPunta {
           const [m] = masCercanos(this.app, { x: XP, z: PLANO.z1 - 0.6, piso: 1 }, { k: 1 });
           this.mejorAlEntrar = m || null;
         }
-        H.banner('Sensor S1: +1 persona', 'ok', `Personas dentro: ${antes} → ${this.b.puertas.dentro} de ${PLANO.aforo} · libres: piso 1 = ${this.b.libres(1)}, piso 2 = ${this.b.libres(2)}`, 4200);
+        H.banner('Sensor S1: +1 persona', 'ok', `Personas dentro: ${antes} → ${this.b.puertas.dentro} de ${PLANO.aforo} · libres: piso 1 = ${this.b.libres(1)}, sótano = ${this.b.libres(2)}`, 4200);
       } else {
         // por la salida: el sensor S2 solo cuenta salidas
         this.b.salir(1);
@@ -403,7 +406,7 @@ export class HoraPunta {
     this.son.sentarse();
     this.b3d.flotante('ocupado', a.x, yPiso(a.piso) + 1.7, a.z, '#38bdf8', { escala: 0.8 });
     this.libresAlSentarte = { antes: libresAntes, despues: this.b.libres(a.piso), dentro };
-    H.banner(`¡El asiento ${a.id} es tuyo!`, 'ok', `La cámara de la mesa ${a.mesa} te detectó (3 lecturas en 0,9 s). Libres en el piso ${a.piso}: ${libresAntes} → ${this.b.libres(a.piso)}.`, 4500);
+    H.banner(`¡El asiento ${a.id} es tuyo!`, 'ok', `La cámara de la mesa ${a.mesa} te detectó (3 lecturas en 0,9 s). Libres en el ${nivelDe(a.piso)}: ${libresAntes} → ${this.b.libres(a.piso)}.`, 4500);
     this.tResultado = 1.8;
     this.app.actualizarPistas();
   }
@@ -428,14 +431,14 @@ export class HoraPunta {
     H.resultado(`
       <h2>${titulo}</h2>
       ${H.estrellas(n)}
-      <p style="margin:0">Asiento <b>${a.id}</b> · piso ${a.piso} · ${NOMBRE_ZONA[a.zona]}${a.enchufe ? ' · con enchufe' : ''}${a.ventana ? ' · junto a la ventana' : ''}</p>
+      <p style="margin:0">Asiento <b>${a.id}</b> · ${nivelDe(a.piso)} · ${NOMBRE_ZONA[a.zona]}${a.enchufe ? ' · con enchufe' : ''}${a.ventana ? ' · junto a la ventana' : ''}</p>
       <div class="cifras-resultado">
         <div><span>Tiempo desde que entraste</span><b>${H.formatoTiempo(tDentro)}</b></div>
         <div><span>Caminaste</span><b>${metros} m</b></div>
         <div><span>Asientos que te ganaron</span><b>${this.perdidos}</b></div>
       </div>
       <p class="nota">${mejor ? `Cuando entraste, el libre más cercano era <b>${mejor.asiento.id}</b>, a ${Math.round(mejor.metros)} m; adentro caminaste ${metrosDentro} m. ` : ''}${this.perdidos ? `Te ganaron ${this.perdidos === 1 ? 'un asiento' : `${this.perdidos} asientos`}: cada vez, la cámara de esa mesa lo detectó y la app te llevó al libre más cercano. ` : ''}${this.ganados ? '¡Y le ganaste el sitio a otro estudiante! ' : ''}</p>
-      <p class="nota"><b>Qué cambió en el sistema:</b> asientos libres del piso ${a.piso}: ${s.antes} → ${s.despues} (lo detectó la cámara de tu mesa). <b>Personas dentro: ${s.dentro}</b>, no cambió al sentarte: ese número solo lo mueven los sensores de las puertas.</p>
+      <p class="nota"><b>Qué cambió en el sistema:</b> asientos libres del ${nivelDe(a.piso)}: ${s.antes} → ${s.despues} (lo detectó la cámara de tu mesa). <b>Personas dentro: ${s.dentro}</b>, no cambió al sentarte: ese número solo lo mueven los sensores de las puertas.</p>
       <p class="mini">3 ★: no perder ningún asiento y sentarte en menos de 1:15 desde que entras. Ganarle el sitio a un rival suma una estrella.</p>
       <div class="fila"><button class="primario" data-r="otra">Jugar otra vez</button><button data-r="salir">Levantarme e irme</button><button data-r="quedarme">Quedarme sentado</button><button data-r="menu">Otras experiencias</button></div>`,
     (r) => r.addEventListener('click', (e) => {
@@ -463,7 +466,7 @@ export class HoraPunta {
     this.j.iniciar({ x: acc.x, z: acc.z, piso: a.piso, rumbo: a.mira > 0 ? 0 : Math.PI, velocidad: 1.75, conservar: true });
     this.b3d.marcarDestino(this.destinoSalida);
     this.#calcularRuta();
-    H.banner('Tu asiento quedó libre', 'info', `La cámara lo vio vacío en 0,9 s: libres en el piso ${a.piso}: ${libres} → ${this.b.libres(a.piso)}. Sal por la puerta de SALIDA (sensor S2).`, 5000);
+    H.banner('Tu asiento quedó libre', 'info', `La cámara lo vio vacío en 0,9 s: libres en el ${nivelDe(a.piso)}: ${libres} → ${this.b.libres(a.piso)}. Sal por la puerta de SALIDA (sensor S2).`, 5000);
     this.app.actualizarPistas();
   }
 
@@ -539,7 +542,7 @@ export class HoraPunta {
         const cerca = this.dentro && this.#cerca(a);
         cuerpo = cerca
           ? `<p><b>Pulsa E para sentarte</b> en ${a.id}.</p><div class="fila"><button data-a="sentarme" class="primario">Sentarme</button></div>`
-          : `<p>Ve a tu asiento <b>${a.id}</b> · piso ${a.piso}${a.piso === 2 ? ' (sube por la escalera del fondo a la izquierda)' : ''} · <b>${Math.round(this.rutaMetros)} m</b></p>`;
+          : `<p>Ve a tu asiento <b>${a.id}</b> · ${nivelDe(a.piso)}${a.piso === 2 ? ' (baja por la escalera a la izquierda de la entrada)' : ''} · <b>${Math.round(this.rutaMetros)} m</b></p>`;
         const r = this.m.rival;
         if (r && r.asiento === a.id) cuerpo += `<div class="aviso-objetivo">⚠ <b>Un estudiante va a tu asiento.</b> Está a ${Math.round(this.#restanteRival(r))} m; tú, a ${Math.round(this.rutaMetros)} m. Corre con Shift o elige otro (F).</div>`;
       }
@@ -623,7 +626,7 @@ export class HoraPunta {
       else l.push(`Ve a ${this.objetivo.id} · ${Math.round(this.rutaMetros)} m${this.m.rival?.asiento === this.objetivo.id ? ' · ¡RIVAL!' : ''}`);
     } else if (this.fase === 'sentado') l.push(`Sentado en ${this.tuyo.id} · A para levantarte`);
     else if (this.fase === 'saliendo') l.push('Sal por la puerta de SALIDA (sensor S2)');
-    l.push(`Libres: piso 1 = ${b.libres(1)} · piso 2 = ${b.libres(2)} · dentro ${b.puertas.dentro}/${b.puertas.aforo}`);
+    l.push(`Libres: piso 1 = ${b.libres(1)} · sótano = ${b.libres(2)} · dentro ${b.puertas.dentro}/${b.puertas.aforo}`);
     return l;
   }
 }
