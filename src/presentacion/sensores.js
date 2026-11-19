@@ -9,6 +9,8 @@
 //    con un clic. Lo traducido se reenvía con el formato del informe, así el visor lo entiende igual.
 //  · Nunca inventa eventos: sin sensores no hay "entradas reales". El modo ensayo es aparte y
 //    siempre se rotula como simulado.
+//  · Prueba del sensor: guarda un espejo de lo que muestra el ESP32 (entradas, salidas, dentro y LED,
+//    lo mismo que su LCD), los últimos cruces con su duración y un registro descargable en CSV.
 import { Emisor } from '../datos/estado.js';
 import { interpretarLinea } from '../datos/parser.js';
 import { CONTADOR } from '../config.js';
@@ -18,7 +20,15 @@ const sinTildes = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLo
 const CLAVE_PATRONES = 'ba-presentacion-patrones';
 const CLAVE_BAUDIOS = 'ba-presentacion-baudios';
 export const BAUDIOS = [115200, 9600, 57600, 38400, 19200, 74880, 250000];
+// Nombre del puerto para mostrar: el chip CH340 lo usan la base ESP32-CAM-MB, muchos ESP32 DevKit y los
+// Arduino Nano compatibles, así que no se presupone cuál es
+export const nombrePuerto = (p) => String(p?.nombre || 'Puerto USB').replace(' (ESP32-CAM-MB)', ' · USB-serie');
 const REBOTE_MS = 1200;
+// "Reiniciar conteo" desde la página del ESP32 (o 'r' en su Monitor Serie): t,-,REINICIO,,0,0,0,0
+const RE_REINICIO = /^\s*(\d+)\s*,\s*[^,]*,\s*REINICIO\s*,\s*-?\d*\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?\d+)\s*,\s*([01])\s*$/i;
+const MAX_REGISTRO = 50000;
+const dos = (n) => String(n).padStart(2, '0');
+const horaCompleta = (d) => `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())} ${dos(d.getHours())}:${dos(d.getMinutes())}:${dos(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, '0')}`;
 
 // Patrón aprendido a partir de una línea: los números pasan a ser comodines
 export function patronDeLinea(linea) {
@@ -121,6 +131,13 @@ export class SensoresPresentacion extends Emisor {
     this.basura = 0;
     this.patrones = this.#leer(CLAVE_PATRONES, []);
     this.oyentes = [];
+    // prueba del sensor
+    this.espejo = null;            // { entradas, salidas, dentro, led, t }: lo mismo que muestra el LCD del ESP32
+    this.cruces = [];              // últimos eventos del ESP32 (DETECTADO, LIBRE, REINICIO)
+    this.prueba = { s1: 0, s2: 0, desde: new Date() };
+    this.registroCSV = [];         // [hora de la PC, línea CSV, origen] para descargar
+    this.ipESP32 = null;           // la página web del ESP32 (si su arranque llegó por el cable)
+    this.tCruce = -Infinity;       // último DETECTADO (para encender el recorrido de los datos)
   }
 
   get est() { return this.app.estado; }
@@ -223,10 +240,49 @@ export class SensoresPresentacion extends Emisor {
         if (ev) tipo = this.#aplicarTraduccion(ev, texto) || tipo;
       }
     }
+    this.#prueba(texto, r, tipo);
     const item = { t: this.ultimaLinea, canal, linea: texto, tipo };
     this.lineas.push(item);
     if (this.lineas.length > 60) this.lineas.shift();
     this.emit('linea', item);
+  }
+
+  // ------------------------------------------------------------ prueba del sensor
+  // Cada línea del ESP32 (o traducida al mismo formato) actualiza el espejo de su LCD y la lista de cruces
+  #prueba(texto, r, tipo) {
+    if (r?.tipo === 'info' && r.ip && /pagina|biblioaforo|http/i.test(sinTildes(r.texto))) this.ipESP32 = r.ip;
+    let ev = null;
+    if (r?.tipo === 'contador') ev = { evento: r.evento, sensor: r.sensor, duracion: r.duracion_ms, entradas: r.entradas, salidas: r.salidas, dentro: r.dentro, led: r.led, t_ms: r.t_ms };
+    else {
+      const m = RE_REINICIO.exec(texto);
+      if (m) ev = { evento: 'REINICIO', sensor: null, duracion: null, entradas: Number(m[2]), salidas: Number(m[3]), dentro: Number(m[4]), led: Number(m[5]), t_ms: Number(m[1]) };
+    }
+    if (!ev) return;
+    const ahora = new Date();
+    const origen = tipo === 'traducida' ? 'traducida' : 'real';
+    this.espejo = { entradas: ev.entradas, salidas: ev.salidas, dentro: ev.dentro, led: ev.led, t: ahora };
+    if (ev.evento === 'DETECTADO') {
+      if (ev.sensor === 'S2') this.prueba.s2++; else this.prueba.s1++;
+      this.tCruce = performance.now();
+    }
+    this.cruces.push({ t: ahora, origen, linea: texto.trim(), ...ev });
+    if (this.cruces.length > 200) this.cruces.shift();
+    this.registroCSV.push([ahora, texto.trim(), origen]);
+    if (this.registroCSV.length > MAX_REGISTRO) this.registroCSV.shift();
+    this.emit('cruceCrudo', ev);
+  }
+
+  // Registro de la sesión en CSV: la hora de la PC más las columnas que imprime el ESP32
+  exportarCSV() {
+    const filas = ['hora_pc,t_ms,sensor,evento,duracion_ms,entradas,salidas,dentro,led,origen'];
+    for (const [t, linea, origen] of this.registroCSV) filas.push(`${horaCompleta(t)},${linea},${origen}`);
+    return `${filas.join('\r\n')}\r\n`;
+  }
+
+  // Pone en cero los contadores de la prueba (no toca el ESP32: la app nunca le escribe)
+  limpiarPrueba() {
+    this.prueba = { s1: 0, s2: 0, desde: new Date() };
+    this.cruces = [];
   }
 
   #aplicarTraduccion(ev, original) {
@@ -316,7 +372,7 @@ export class SensoresPresentacion extends Emisor {
     const ahora = Date.now();
     const hace = (t) => (t ? Math.max(0, Math.round((ahora - t) / 1000)) : null);
     let via = 'ninguna', detalle = 'Sin sensores conectados';
-    if (f.modo === 'usb') { via = 'usb'; detalle = `USB · ${f.puertos.map((p) => p.nombre).join(' + ')} · ${CONTADOR.baudios} baudios`; }
+    if (f.modo === 'usb') { via = 'usb'; detalle = `USB · ${f.puertos.map(nombrePuerto).join(' + ')} · ${CONTADOR.baudios} baudios`; }
     else if (f.modo === 'remoto') { via = 'sala'; detalle = f.remotoConectado ? `Sala ${f.recibiendo} en vivo` : `Sala ${f.recibiendo}: conectando…`; }
     else if (f.modo === 'espera') { via = 'espera'; detalle = f.puertos.length ? 'Sensores en pausa' : 'Esperando sensores'; }
     else if (f.modo === 'sim') detalle = 'Simulación (sin sensores reales)';

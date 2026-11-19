@@ -18,7 +18,7 @@ El menú (`#/`) muestra la biblioteca viva girando de fondo. Otros enlaces: `#/v
 
 ### Sección extra: 🎤 Simulación para presentación (`#/presentacion`)
 
-La biblioteca de Hora punta con el **piso 1 y el sótano llenos**: solo la **mesa piloto 1-01** tiene **2 de sus 4 sillas libres**. Con el Meta Quest 3 puesto caminas de verdad hacia el sensor S1; cuando el **sensor real** te detecta, en el simulador también entras. Luego vas a la mesa piloto, eliges una silla libre, te sientas y te quedas. Lee el ESP32 del informe o el Arduino de otro programa (se traduce solo o se le enseña con un clic) por USB, y el visor recibe los datos con `#/presentacion/CÓDIGO` o por Air Link. Detalles, calibración y qué es real: [docs/PRESENTACION.md](docs/PRESENTACION.md).
+La biblioteca de Hora punta con el **piso 1 y el sótano llenos**: solo la **mesa piloto 1-01** tiene **2 de sus 4 sillas libres**. Con el Meta Quest 3 puesto caminas de verdad hacia el sensor S1; cuando el **sensor real** te detecta, en el simulador también entras. Luego vas a la mesa piloto, eliges una silla libre, te sientas y te quedas. Lee el ESP32 del informe o el Arduino de otro programa (se traduce solo o se le enseña con un clic) por USB, y el visor recibe los datos con `#/presentacion/CÓDIGO` o por Air Link. La pestaña **«Prueba del sensor»** sirve para probarlo en minutos con el ESP32 del equipo (mismo cable USB): LCD virtual, contadores, cada cruce, cómo llega cada línea a la simulación y descarga del registro CSV. Detalles, calibración y qué es real: [docs/PRESENTACION.md](docs/PRESENTACION.md).
 
 ## Lo que es real y lo que es simulado
 

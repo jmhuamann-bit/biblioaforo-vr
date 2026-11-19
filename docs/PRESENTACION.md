@@ -8,8 +8,8 @@ No cambia las otras experiencias: solo se registró en la lista de experiencias 
 
 | Archivo | Qué hace |
 | --- | --- |
-| `src/presentacion/presentacion.js` | La sección: mundo lleno, máquina de estados, HUD, panel lateral (Presentación y Conexión), visor y teclado. |
-| `src/presentacion/sensores.js` | Lee los sensores reales (USB o sala en vivo): ingresos S1 y salidas S2 sin duplicados, reinicio del ESP32, estado de la conexión, **traductor** para el Arduino del compañero y velocidad del puerto. |
+| `src/presentacion/presentacion.js` | La sección: mundo lleno, máquina de estados, HUD, panel lateral (Prueba del sensor, Presentación y Conexión), visor y teclado. |
+| `src/presentacion/sensores.js` | Lee los sensores reales (USB o sala en vivo): ingresos S1 y salidas S2 sin duplicados, reinicio del ESP32, estado de la conexión, **traductor** para el Arduino del compañero, velocidad del puerto y, para la prueba, el **espejo del LCD** del ESP32, los cruces y el **registro CSV**. |
 | `src/presentacion/calibracion.js` | Matemática de la calibración del visor con el sensor real y distancia al sensor. |
 | `src/presentacion/visual.js` | Ayudas 3D: marca del sensor S1, punto de inicio a 2 m, cartel con la distancia, lectura en la vista del visor, panel de calibración, panel de la mesa piloto y fundido a negro. |
 | `src/app.js`, `src/juego/menu.js`, `estilos-juego.css` | Solo agregados: la ruta `#/presentacion` y la tarjeta del menú. |
@@ -44,6 +44,32 @@ ESP32 / Arduino ──USB──► laptop (Chrome/Edge, Web Serial, solo lectura
 | Sentado | Se sienta; con ESP32-CAM, la confirmación **física** llega cuando la cámara ve ocupada esa zona. |
 
 Casos que se manejan: pérdida de conexión (el estado y el cartel lo dicen; no se inventan ingresos), datos viejos de la cámara (aviso con los segundos), líneas repetidas (se compara el contador `entradas`), doble detección en menos de 1,2 s (rebote: se toma como la misma persona), reinicio del ESP32 (el contador vuelve a 0 y se sigue contando), instantáneas de la sala que corrigen líneas perdidas sin duplicar, la silla elegida que se ocupa antes de sentarse, cambio de silla, recentrado del visor (pide calibrar otra vez).
+
+## Prueba del sensor con el equipo (10 minutos)
+
+Para comprobar que el sensor real cuenta y que la pantalla lo reconoce, con el ESP32 que ya está montado (programa `BiblioAforo_final_LCD.ino`, el del Anexo A con LCD). **No hay que conectar nada nuevo:** se usa el mismo cable USB con el que el ESP32 ya se lee en la laptop.
+
+**Antes (2 min):**
+1. En la laptop donde está conectado el ESP32: **Chrome o Edge**. Abre `https://jmhuamann-bit.github.io/biblioaforo-vr/#/presentacion` y comprueba que carga.
+2. **Cierra el Monitor Serie de Arduino** (y cualquier programa que esté leyendo el puerto): un puerto COM solo lo puede abrir un programa a la vez. El ESP32 sigue contando, su LCD y su página web siguen funcionando.
+
+**Prueba (5 min), pestaña «Prueba del sensor»** (se abre sola mientras no hay sensor; tecla `U`):
+1. **Conectar ESP32 por USB** → elige el puerto del ESP32 (`CP210x`, `USB-SERIAL CH340` o `USB JTAG/serial`, COM…). Velocidad: **115 200** (la del `Serial.begin` del programa). La lista muestra «Puerto USB abierto».
+2. Al conectar no llega nada todavía: **el ESP32 solo escribe cuando un sensor cambia**. Pasa la silueta frente a **S1**: aparece la línea `…,S1_entrada,DETECTADO,,1,0,1,0`, el **LCD virtual** pasa a «Dentro: 1/4» (igual que el LCD de la maqueta), los contadores suben y la simulación te hace **entrar**: la ruta lleva a la mesa piloto, donde quedan **dos sillas libres (C y D)**.
+3. Pasa por **S2**: resta 1. Con 4 personas dentro, el LCD dice «LLENO» y el LED se marca **ON** (como el LED verde de la maqueta).
+4. **Descargar registro CSV**: guarda cada línea recibida con la hora de la PC (`hora_pc,t_ms,sensor,evento,duracion_ms,entradas,salidas,dentro,led,origen`).
+
+**Si algo falla:**
+
+| Síntoma | Qué hacer |
+| --- | --- |
+| «No se pudo abrir el puerto…» | El puerto está ocupado: cierra el Monitor Serie de Arduino y vuelve a pulsar **Conectar**. |
+| El puerto no aparece en la lista | Cable USB solo de carga, o falta el driver CP210x/CH340 (si el Arduino IDE ve el puerto, el driver está). |
+| Llegan caracteres raros | La velocidad no coincide: elige la del `Serial.begin` y vuelve a conectar. |
+| Conectado pero no pasa nada | Es normal hasta el primer cruce. Si al pasar la silueta tampoco llega nada, revisa el sensor (su LED rojo debe encenderse) y el LCD de la maqueta. |
+| El programa del compañero imprime otro texto | Se traduce solo («Entrada detectada», «Personas: 5», 0/1…) o se enseña con un clic en el monitor (= entrada / = salida). |
+
+**Cómo se extraen los datos (para el jurado):** el sensor E18-D80NK corta su salida a LOW → el ESP32 (D26 = S1, D27 = S2) acepta el cambio si dura 50 ms y suma o resta → imprime **una línea CSV por evento** por el USB (115 200 baudios) → el navegador la lee con **Web Serial** (solo lectura, como el Monitor Serie) → la separa por comas y actualiza la simulación. La pestaña muestra ese recorrido y la última línea **campo por campo**. La línea 2 del LCD (asientos libres) la da la ESP32-CAM por Wi-Fi; en la página solo aparece si la cámara también se conecta por USB. Por Wi-Fi no se puede leer el ESP32 desde la página publicada: el navegador bloquea pedir datos `http://` desde una página `https://`.
 
 ## Ejecutar y publicar
 
@@ -93,7 +119,8 @@ El sensor E18-D80NK solo dice «alguien pasó» (detecta de ~3 a 80 cm). La **di
 
 ## Pruebas hechas
 
-- 26 pruebas de lógica en Node: traductor (textos, contadores, 0/1, distancia, asientos, líneas aprendidas, caracteres ilegibles), antiduplicados, rebote, reinicio del ESP32, instantáneas de la sala, reenvío al visor, ensayo, matemática de la calibración (rápida, precisa, convención de three.js).
+- 28 pruebas de lógica en Node (incluida la salida exacta de `BiblioAforo_final_LCD.ino`: arranque del ESP32, cabecera, DETECTADO/LIBRE con su duración, LED al llegar a 4, salida por S2, «REINICIO» desde su página y el registro CSV): traductor (textos, contadores, 0/1, distancia, asientos, líneas aprendidas, caracteres ilegibles), antiduplicados, rebote, reinicio del ESP32, instantáneas de la sala, reenvío al visor, ensayo, matemática de la calibración (rápida, precisa, convención de three.js).
+- Navegador, pestaña «Prueba del sensor»: un ESP32 simulado por USB que imprime lo mismo que el programa del equipo; puerto ocupado (Monitor Serie abierto) explicado en la lista; conexión a 115 200 sin reiniciar el ESP32; LCD virtual («Dentro: 1/4», «4 LLENO»), contadores, cruces con su duración, recorrido de los datos, campos de la línea y descarga CSV; la simulación te hace entrar con el primer S1.
 - Navegador (escritorio): recorrido completo con un USB simulado y el texto «Entrada detectada» → ingreso → ruta → mesa → silla D → sentado; confirmación con líneas de la ESP32-CAM; salida por S2 y línea repetida ignorada.
 - Visor simulado: calibración rápida con la persona girada, caminata física con el stick bloqueado (la distancia baja 2,00 → 0,70 m), detección por lecturas 0/1, saltos hasta la mesa, sentarse (ojos a 1,20 m) y ajuste al ponerse de pie o sentarse de verdad.
 - Sesión WebXR con el emulador de Meta Quest 3 (IWER): entrar, reiniciar dentro del visor (vuelve a la calibración) y salir.

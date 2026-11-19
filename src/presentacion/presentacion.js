@@ -12,6 +12,8 @@
 // Qué es real: los ingresos (S1) y salidas (S2) vienen solo del ESP32 (USB en esta PC o la sala en
 // vivo); los cuatro asientos de la mesa piloto vienen de la ESP32-CAM cuando está conectada. El resto
 // de la biblioteca es simulado. El modo ensayo (sin sensores) se rotula siempre como simulado.
+// Pestaña «Prueba del sensor»: para probar en pocos minutos el ESP32 del equipo por el mismo cable USB
+// (conectar, pasar por S1 y S2, ver el LCD virtual, los cruces y cómo llega cada línea a la simulación).
 // No cambia las otras experiencias: usa el mismo mundo y lo deja como estaba al salir.
 import * as THREE from 'three';
 import { PLANO, yPiso, ruta, accesoAsiento, rutaInterior, ESTANTES_FRENTE, nivelPorAltura } from '../biblioteca/plano.js';
@@ -20,7 +22,7 @@ import * as H from '../juego/hudJuego.js';
 import { escapar } from '../ui/hud.js';
 import { FUENTE } from '../motor/textos.js';
 import { CONTADOR } from '../config.js';
-import { SensoresPresentacion, BAUDIOS } from './sensores.js';
+import { SensoresPresentacion, BAUDIOS, nombrePuerto } from './sensores.js';
 import {
   SENSOR_VIRTUAL, DISTANCIA_INICIO, calibrarRapida, calibrarDosPuntos, distanciaAlSensor, distanciaEscritorio,
   aplicarAlRig, rumboLocal, rumboDe, textoMetros,
@@ -136,6 +138,7 @@ export class Presentacion {
       s.on('reinicio', (e) => this.#alReinicioESP(e)),
       s.on('traduccion', (e) => this.#log('traducida', `Arduino: “${recortar(e.original, 48)}” → ${e.tipo}`)),
       s.on('basura', (e) => this.#alBasura(e)),
+      app.fuentes.on('aviso', (a) => { if (a?.tipo === 'error' && a.texto) this.errorUSB = { t: Date.now(), texto: TEXTO_PUERTO_OCUPADO }; }),
       app.fuentes.on('modo', () => this.#alCambiarFuente()),
       app.estado.on('asientos', () => this.#alCamara()),
       app.estado.on('reinicio', () => this.#aplicarPiloto()),
@@ -1051,7 +1054,7 @@ export class Presentacion {
   // ================================================================ textos y paneles
   #textoVia() {
     const f = this.app.fuentes;
-    if (f.modo === 'usb') return `Sensor real por USB (${f.puertos.map((p) => p.nombre).join(' + ')})`;
+    if (f.modo === 'usb') return `Sensor real por USB (${f.puertos.map(nombrePuerto).join(' + ')})`;
     if (f.modo === 'remoto') return `Sensor real vía la sala ${f.recibiendo}`;
     return 'Sensor real';
   }
@@ -1074,7 +1077,7 @@ export class Presentacion {
         return 'Párate a 2 m del sensor S1 real, míralo y pulsa A';
       case 'a2m':
       case 'caminando':
-        if (sinConexion) return corta ? 'Sin conexión con el sensor: conéctalo o usa el ensayo' : 'Sin conexión con el sensor real: tu ingreso no se puede confirmar. Conéctalo (pestaña Conexión) o activa el modo ensayo.';
+        if (sinConexion) return corta ? 'Sin conexión con el sensor: conéctalo o usa el ensayo' : 'Sin conexión con el sensor real: tu ingreso no se puede confirmar. Conéctalo (pestaña Prueba del sensor, tecla U) o activa el modo ensayo.';
         if (this.cruzoSinSensor) return 'Cruzaste la puerta virtual: pasa frente al sensor real para que te detecte';
         return this.fase === 'a2m' ? 'Camina hacia el sensor S1 real: la puerta se abre cuando te detecte' : 'Sigue: pasa frente al sensor y corta el haz infrarrojo';
       case 'sensor': return '¡Detectado! Entrando a la biblioteca…';
@@ -1187,7 +1190,10 @@ export class Presentacion {
     }
     cuerpo += `<p>${escapar(this.#instruccion())}</p>`;
     if (this.sensores.ensayo) cuerpo += '<div class="pres-ensayo-aviso">Modo ensayo: los pasos por S1/S2 que simules se marcan como SIMULADOS.</div>';
+    const esp = this.sensores.espejo;
+    if (esp && this.sensores.enVivo) cuerpo += `<div class="pres-esp"><span class="pres-tag real">ESP32</span> entradas <b>${esp.entradas}</b> · salidas <b>${esp.salidas}</b> · dentro <b>${esp.dentro}/4</b>${esp.led ? ' · <b class="lleno">LLENO</b>' : ''}</div>`;
     const botones = [];
+    if (!this.sensores.enVivo && !this.sensores.ensayo) botones.push('<button data-a="prueba" class="primario">Conectar y probar el sensor (U)</button>');
     if (!this.entro && this.sensores.ensayo) botones.push('<button data-a="s1" class="primario">Ensayo: pasar por S1 (I)</button>');
     if (this.fase === 'recorriendo') botones.push(`<button data-a="mesa" class="primario">${this.auto ? 'Pausar' : 'Ir a la mesa piloto'}</button>`);
     if (this.fase === 'mesa' || this.fase === 'seleccion') for (const a of this.#libresPiloto()) botones.push(`<button data-a="silla:${a.id}" class="${this.seleccion?.id === a.id ? 'primario' : ''}">${this.seleccion?.id === a.id ? 'Sentarme en' : 'Silla'} ${letra(a)}</button>`);
@@ -1226,7 +1232,7 @@ export class Presentacion {
     const l = [['W A S D', 'caminar'], ['Clic', 'mirar con el ratón']];
     if (!this.entro) l.push(['T', 'modo ensayo'], ['I', 'ensayo: S1']);
     else l.push(['Enter', 'ir a la mesa · sentarme'], ['E', 'elegir silla'], ['F', 'silla libre'], ['1–4', 'silla A–D']);
-    l.push(['R', 'reiniciar'], ['U', 'conectar sensores']);
+    l.push(['R', 'reiniciar'], ['U', 'conectar el ESP32 (USB)']);
     return l;
   }
 
@@ -1239,6 +1245,7 @@ export class Presentacion {
       KeyO: () => { if (this.sensores.ensayo) this.sensores.salidaEnsayo(); },
       KeyT: () => this.#alternarEnsayo(),
       KeyR: () => this.reiniciar(),
+      KeyU: () => { this.#accion('prueba'); this.#conectarUSB(); },
     };
     PILOTO.forEach((id, k) => { t[`Digit${k + 1}`] = () => { if (this.entro && this.fase !== 'sentado') this.#elegirOSentarse(id); }; });
     return t;
@@ -1253,12 +1260,11 @@ export class Presentacion {
 
   // ================================================================ panel lateral: Presentación y Conexión
   proveedor() {
-    const prov = {
-      pestanas: {
-        presentacion: { titulo: 'Presentación', html: () => this.#htmlPresentacion(), montar: (r) => this.#montarPanel(r), actualizar: (r) => this.#actualizarPresentacion(r) },
-        conexion: { titulo: 'Conexión', html: () => this.#htmlConexion(), montar: (r) => this.#montarPanel(r), actualizar: (r) => this.#actualizarConexion(r) },
-      },
-    };
+    const presentacion = { titulo: 'Presentación', html: () => this.#htmlPresentacion(), montar: (r) => this.#montarPanel(r), actualizar: (r) => this.#actualizarPresentacion(r) };
+    const prueba = { titulo: 'Prueba del sensor', html: () => this.#htmlPrueba(), montar: (r) => this.#montarPanel(r), actualizar: (r) => this.#actualizarPrueba(r) };
+    const conexion = { titulo: 'Conexión', html: () => this.#htmlConexion(), montar: (r) => this.#montarPanel(r), actualizar: (r) => this.#actualizarConexion(r) };
+    // sin sensor conectado, se abre primero la prueba (conectar y pasar por S1); con sensor, la presentación
+    const prov = { pestanas: this.sensores.enVivo ? { presentacion, prueba, conexion } : { prueba, presentacion, conexion } };
     this.proveedorActual = prov;
     return prov;
   }
@@ -1266,6 +1272,7 @@ export class Presentacion {
   #montarPanel(r) {
     // la pestaña se dibuja de nuevo: todo lo que se dibuja "solo si cambió" se vuelve a dibujar
     this.clavePasos = ''; this.vRegistroDibujado = -1; this.claveMonitor = ''; this.clavePatrones = null;
+    this.claveChecks = ''; this.claveGrandes = null; this.claveCruces = ''; this.claveCampos = null; this.claveMonitorPrueba = ''; this.tCrucePintado = null;
     r.addEventListener('click', (e) => {
       const b = e.target.closest('[data-a],[data-ensenar],[data-olvidar]');
       if (!b) return;
@@ -1324,6 +1331,13 @@ export class Presentacion {
       }
       case 'dejarRecibir': f.dejarDeRecibir(); this.app.hud.refrescarPestana(); break;
       case 'conexion': this.app.hud.plegar(false); this.app.hud.mostrarPestana('conexion'); break;
+      case 'prueba': this.app.hud.plegar(false); this.app.hud.mostrarPestana('prueba'); break;
+      case 'descargarCSV': this.#descargarCSV(); break;
+      case 'limpiarPrueba':
+        this.sensores.limpiarPrueba();
+        this.claveChecks = ''; this.claveCruces = '';
+        this.#log('sistema', 'Prueba del sensor en cero (el ESP32 no se toca: la app nunca le escribe)');
+        break;
       default: break;
     }
     this.clavesAcciones = null;
@@ -1335,13 +1349,41 @@ export class Presentacion {
   }
 
   async #conectarUSB() {
+    if (this.conectando) return;                 // un doble clic no abre dos veces el selector de puertos
+    this.conectando = true;
     const b = this.#baudiosElegidos();
-    try { await this.sensores.conectarUSB(b); this.#log('sistema', `Puerto USB abierto a ${b} baudios`); this.avisoBasura = false; }
-    catch (e) {
+    const f = this.app.fuentes;
+    const antes = f.puertos.length;
+    try {
+      await this.sensores.conectarUSB(b);
+      if (f.puertos.length > antes) {
+        this.#log('sistema', `Puerto USB abierto a ${b} baudios (${nombrePuerto(f.puertos.at(-1))})`);
+        this.avisoBasura = false; this.errorUSB = null;
+        if (!antes) this.sensores.limpiarPrueba();
+        H.banner('ESP32 conectado por USB', 'ok', 'Pasa la silueta frente a S1: el ESP32 solo escribe cuando un sensor cambia.', 4200);
+      } else if (!this.errorUSB || Date.now() - this.errorUSB.t > 3000) this.errorUSB = { t: Date.now(), texto: TEXTO_PUERTO_OCUPADO };
+    } catch (e) {
       if (e?.message === 'sin-webserial') this.app.hud.aviso('Este navegador no puede leer USB. Abre la página en Chrome o Edge en la laptop (en el visor, usa el código de sala).', 'error', 8000);
-      else if (e?.name !== 'NotFoundError') this.app.hud.aviso(`No se pudo conectar: ${e?.message || e}. Cierra el Monitor Serie de Arduino y vuelve a intentar.`, 'error', 8000);
-    }
+      else if (e?.name !== 'NotFoundError') {
+        this.errorUSB = { t: Date.now(), texto: TEXTO_PUERTO_OCUPADO };
+        this.app.hud.aviso(`No se pudo conectar: ${e?.message || e}. ${TEXTO_PUERTO_OCUPADO}`, 'error', 9000);
+      }
+    } finally { this.conectando = false; }
     this.app.hud.refrescarPestana();
+  }
+
+  // Guarda lo que llegó del ESP32 en esta sesión (hora de la PC + las columnas del CSV del informe)
+  #descargarCSV() {
+    const s = this.sensores;
+    if (!s.registroCSV.length) { this.app.hud.aviso('Todavía no hay líneas del ESP32 para guardar: pasa la silueta por un sensor.', 'info'); return; }
+    const d = new Date();
+    const nombre = `biblioaforo-sensor-${d.getFullYear()}${dos(d.getMonth() + 1)}${dos(d.getDate())}-${dos(d.getHours())}${dos(d.getMinutes())}.csv`;
+    const url = URL.createObjectURL(new Blob(['\ufeff', s.exportarCSV()], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = nombre;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    this.#log('sistema', `Registro guardado: ${nombre} (${s.registroCSV.length} líneas)`);
   }
 
   #enlaceVisor() {
@@ -1438,6 +1480,149 @@ export class Presentacion {
     }
   }
 
+  // ================================================================ pestaña «Prueba del sensor» (los minutos con el equipo)
+  #htmlPrueba() {
+    const usb = this.app.fuentes.usbDisponible;
+    const opciones = BAUDIOS.map((b) => `<option value="${b}" ${b === CONTADOR.baudios ? 'selected' : ''}>${b.toLocaleString('es-PE')} baudios${b === 115200 ? ' · ESP32 del informe' : b === 9600 ? ' · Arduino común' : ''}</option>`).join('');
+    return `<div class="pres">
+      <div class="tarjeta">
+        <h3>1 · Conectar el ESP32 <small data-v="pVia"></small></h3>
+        <ul class="pres-check" data-v="pChecks"></ul>
+        <div class="acciones" style="margin-top:8px">
+          <button data-a="usb" data-v="pUSB" class="ancho primario" ${usb ? '' : 'disabled'}><span>Conectar ESP32 por USB</span><kbd>U</kbd></button>
+          <button data-a="desconectar" data-v="pDesc"><span>Desconectar</span></button>
+        </div>
+        <label class="pres-campo" style="margin-top:8px">Velocidad (la del <code>Serial.begin</code>) <select data-v="baudios">${opciones}</select></label>
+        <p class="mini" style="margin:6px 0 0">Es el mismo cable USB de siempre: no hay nada nuevo que conectar. La página solo <b>lee</b> lo que el ESP32 imprime, como el Monitor Serie; su programa, su LCD y su página web siguen igual.</p>
+      </div>
+      <div class="tarjeta">
+        <h3>2 · Pasar por los sensores <small>lo que cuenta el ESP32</small></h3>
+        <div class="pres-lcd apagado" data-v="pLcd" role="img" aria-label="Pantalla LCD del ESP32"><div>Dentro: --/4    </div><div>Libres: --      </div></div>
+        <p class="mini" style="margin:5px 0 8px">Igual que el LCD de la maqueta. Su segunda línea (asientos libres) la da la ESP32-CAM por Wi-Fi: aquí solo aparece si la cámara también está conectada por USB.</p>
+        <div class="pres-grandes" data-v="pGrandes"></div>
+        <ul class="pres-cruces" data-v="pCruces"></ul>
+        <div class="acciones" style="margin-top:8px">
+          <button data-a="descargarCSV"><span>Descargar registro CSV</span></button>
+          <button data-a="limpiarPrueba"><span>Poner la prueba en cero</span></button>
+        </div>
+      </div>
+      <div class="tarjeta">
+        <h3>3 · En la simulación <small>mesa piloto 1-01</small></h3>
+        <div class="fila-datos" data-v="pSim" style="margin-top:0"></div>
+        <p class="nota" data-v="pSimNota" style="margin-bottom:0"></p>
+      </div>
+      <div class="tarjeta">
+        <h3>Cómo llegan los datos <small>del sensor a la pantalla</small></h3>
+        <ol class="pres-flujo" data-v="pFlujo">
+          <li><b>Sensor E18-D80NK</b><span>la silueta corta el haz infrarrojo</span></li>
+          <li><b>ESP32 DevKit</b><span>D26 = S1 · D27 = S2 · filtro de 50 ms · cuenta</span></li>
+          <li><b>Cable USB</b><span>una línea CSV por evento · 115 200 baudios</span></li>
+          <li><b>Navegador</b><span>Web Serial (Chrome o Edge): lee como el Monitor Serie</span></li>
+          <li><b>Simulación</b><span>la puerta se abre y suma +1</span></li>
+        </ol>
+        <p class="mini" style="margin:10px 0 4px">Última línea del ESP32, campo por campo:</p>
+        <div class="pres-campos" data-v="pCampos"></div>
+        <p class="mini" data-v="pIP" style="margin:6px 0 0"></p>
+      </div>
+      <div class="tarjeta">
+        <h3>Monitor del puerto <small data-v="pLineas"></small></h3>
+        <div class="pres-monitor" data-v="pMonitor"><span class="mini">Todavía no llegan líneas.</span></div>
+      </div>
+    </div>`;
+  }
+
+  #actualizarPrueba(r) {
+    const v = (k) => r.querySelector(`[data-v="${k}"]`);
+    const f = this.app.fuentes, s = this.sensores, e = s.estadoConexion();
+    const usb = f.usbDisponible, abierto = f.modo === 'usb' && f.puertos.length > 0, sala = e.via === 'sala';
+    const L = s.lineas, legibles = L.filter((x) => x.tipo !== 'ilegible').length;
+    const esp = s.espejo;
+    v('pVia').textContent = abierto ? `${f.puertos.map(nombrePuerto).join(' + ')} · ${CONTADOR.baudios} baudios` : sala ? e.detalle : 'sin conexión';
+    v('pDesc').disabled = !f.puertos.length;
+    const bUSB = v('pUSB');
+    bUSB.querySelector('span').textContent = abierto ? 'Conectar otro puerto (p. ej. la ESP32-CAM)' : 'Conectar ESP32 por USB';
+    bUSB.classList.toggle('primario', !abierto);
+    // 1 · lista de comprobación (la primera que falta queda resaltada)
+    const error = !abierto && this.errorUSB && Date.now() - this.errorUSB.t < 90000 ? this.errorUSB.texto : null;
+    const checks = [
+      [usb || sala, usb ? 'Navegador con acceso a USB (Chrome o Edge)' : sala ? 'Datos por la sala en vivo (este navegador no lee USB)' : 'Este navegador no lee USB: abre la página en Chrome o Edge'],
+      [abierto || sala, abierto ? 'Puerto USB abierto' : error || 'Cierra el Monitor Serie de Arduino y pulsa «Conectar ESP32 por USB»'],
+      [legibles > 0, !(abierto || sala) ? 'Llegan líneas del ESP32'
+        : !L.length ? 'Conectado. El ESP32 solo escribe cuando un sensor cambia: pasa la silueta frente a S1'
+          : legibles ? `Llegan líneas del ESP32 (${legibles})` : `Llegan caracteres raros: ese programa no usa ${CONTADOR.baudios} baudios. Elige su velocidad y vuelve a conectar`],
+      [s.prueba.s1 > 0, s.prueba.s1 ? `S1 (entrada) cuenta: ${s.prueba.s1} cruce${s.prueba.s1 === 1 ? '' : 's'}` : 'Pasa la silueta frente a S1 (entrada)'],
+      [s.prueba.s2 > 0, s.prueba.s2 ? `S2 (salida) cuenta: ${s.prueba.s2} cruce${s.prueba.s2 === 1 ? '' : 's'}` : 'Pasa la silueta frente a S2 (salida)'],
+    ];
+    const claveChecks = checks.map((c) => `${c[0]}${c[1]}`).join('|');
+    if (claveChecks !== this.claveChecks) {
+      this.claveChecks = claveChecks;
+      const primera = checks.findIndex((c) => !c[0]);
+      v('pChecks').innerHTML = checks.map(([ok, t], i) => `<li class="${ok ? 'ok' : i === primera ? 'actual' : ''}">${escapar(t)}</li>`).join('');
+    }
+    // 2 · LCD virtual (16 × 2) con el mismo formato que el del ESP32
+    const cam = this.app.estado.camara;
+    const libres = cam.conocida ? cam.asientos.filter((a) => a && a.ocupado === false).length : null;
+    const n2 = (x) => String(x).padStart(2, ' ');
+    const l1 = esp ? (esp.dentro >= 4 ? `Dentro: ${n2(esp.dentro)} LLENO` : `Dentro: ${n2(esp.dentro)}/4`) : 'Dentro: --/4';
+    const l2 = libres != null ? `Libres: ${n2(libres)}/4` : 'Libres: --';
+    const lcd = v('pLcd');
+    lcd.children[0].textContent = l1.padEnd(16, ' ').slice(0, 16);
+    lcd.children[1].textContent = l2.padEnd(16, ' ').slice(0, 16);
+    lcd.classList.toggle('apagado', !esp);
+    const claveG = esp ? `${esp.entradas}|${esp.salidas}|${esp.dentro}|${esp.led}` : '-';
+    if (claveG !== this.claveGrandes) {
+      const g = v('pGrandes');
+      const cambio = this.claveGrandes != null && this.claveGrandes !== '-' && esp;
+      this.claveGrandes = claveG;
+      g.innerHTML = [['Entradas · S1', esp?.entradas], ['Salidas · S2', esp?.salidas], ['Dentro · aforo 4', esp?.dentro], ['LED sala llena', esp ? (esp.led ? 'ON' : 'off') : null]]
+        .map(([t, x], i) => `<div class="${i >= 2 && esp?.led ? 'lleno' : ''}"><small>${t}</small><b>${x ?? '–'}</b></div>`).join('');
+      if (cambio) { g.classList.remove('destello'); void g.offsetWidth; g.classList.add('destello'); }
+    }
+    const claveX = `${s.cruces.length}|${s.cruces.at(-1)?.t?.getTime?.() ?? ''}`;
+    if (claveX !== this.claveCruces) {
+      this.claveCruces = claveX;
+      v('pCruces').innerHTML = s.cruces.length ? s.cruces.slice(-8).reverse().map((c) => {
+        const quien = c.sensor === 'S2' ? 'S2 · salida' : c.sensor === 'S1' ? 'S1 · entrada' : 'ESP32';
+        const que = c.evento === 'DETECTADO' ? (c.sensor === 'S2' ? '−1 · alguien salió' : '+1 · alguien entró')
+          : c.evento === 'LIBRE' ? `haz libre otra vez${c.duracion != null ? ` · estuvo cortado ${c.duracion} ms` : ''}`
+            : 'conteo reiniciado desde el ESP32';
+        return `<li class="${c.evento.toLowerCase()}"><time>${hora(c.t)}</time><span class="pres-tag ${c.origen === 'real' ? 'real' : 'traducida'}">${escapar(quien)}</span><span>${escapar(que)}</span><small>entradas ${c.entradas} · salidas ${c.salidas} · dentro ${c.dentro}${c.origen === 'traducida' ? ' · traducido del texto del Arduino' : ''}</small></li>`;
+      }).join('') : '<li class="vacio">Aquí aparece cada cruce apenas el ESP32 lo cuenta.</li>';
+    }
+    // 3 · la simulación
+    const sillas = this.#libresPiloto().map(letra).sort();
+    v('pSim').innerHTML = `<span>Estado <b>${escapar(NOMBRE[this.fase])}</b></span><span>Personas dentro (simulación) <b>${this.b.puertas.dentro}</b></span><span>Sillas libres en la mesa piloto <b>${sillas.join(' y ') || 'ninguna'}</b></span>`;
+    v('pSimNota').textContent = s.ensayo ? 'Modo ensayo activo: lo que pulses es simulado. Desactívalo (T) para probar el sensor real.'
+      : this.entro ? (this.ingreso?.ensayo ? 'Entraste con un paso de ensayo (simulado).' : 'El sensor S1 real te hizo entrar: la ruta lleva a la mesa piloto, donde quedan dos sillas libres.')
+        : 'El primer paso por S1 te hace entrar a la biblioteca; los siguientes suman a otras personas y S2 las descuenta.';
+    // recorrido de los datos: cada etapa se marca cuando ya funcionó; con cada cruce, se enciende en cadena
+    const etapas = [s.prueba.s1 + s.prueba.s2 > 0, !!esp, abierto || sala, legibles > 0, this.entro && !this.ingreso?.ensayo];
+    const flujo = v('pFlujo');
+    [...flujo.children].forEach((li, i) => li.classList.toggle('ok', etapas[i]));
+    if (s.tCruce !== this.tCrucePintado && performance.now() - s.tCruce < 1600) { flujo.classList.remove('pulso'); void flujo.offsetWidth; flujo.classList.add('pulso'); }
+    this.tCrucePintado = s.tCruce;
+    const ult = [...s.cruces].reverse().find((c) => c.evento !== 'REINICIO') || s.cruces.at(-1) || null;
+    const claveF = ult?.linea || '';
+    if (claveF !== this.claveCampos) {
+      this.claveCampos = claveF;
+      const nombres = ['t_ms', 'sensor', 'evento', 'duración (ms)', 'entradas', 'salidas', 'dentro', 'LED'];
+      const valores = ult ? ult.linea.split(',').map((x) => x.trim()) : [];
+      v('pCampos').innerHTML = nombres.map((n, i) => `<div><small>${n}</small><b>${escapar(ult ? (valores[i] === '' ? '(vacío)' : valores[i] ?? '–') : '–')}</b></div>`).join('')
+        + (ult ? `<code>${escapar(ult.linea)}</code>` : '');
+    }
+    v('pIP').innerHTML = s.ipESP32 ? `Página web del ESP32 (mismo Wi-Fi): <a href="http://${s.ipESP32}/" target="_blank" rel="noopener">http://${s.ipESP32}/</a>` : '';
+    // monitor del puerto
+    const claveM = `${L.length}|${L.at(-1)?.t}|${L.at(-1)?.tipo}|${s.patrones.length}`;
+    if (claveM !== this.claveMonitorPrueba) {
+      this.claveMonitorPrueba = claveM;
+      this.lineasMonitor = L.slice(-10);
+      v('pLineas').textContent = L.length ? `${L.length} líneas recientes` : '';
+      const m = v('pMonitor');
+      m.innerHTML = htmlMonitor(this.lineasMonitor, f.modo === 'usb');
+      m.scrollTop = m.scrollHeight;
+    }
+  }
+
   #htmlConexion() {
     const f = this.app.fuentes;
     const usb = f.usbDisponible;
@@ -1500,12 +1685,7 @@ export class Presentacion {
       this.lineasMonitor = L.slice(-16);
       const usb = this.app.fuentes.modo === 'usb';
       v('lineasCuenta').textContent = `${L.length ? `${L.length} líneas recientes` : ''}`;
-      v('monitor').innerHTML = this.lineasMonitor.length ? this.lineasMonitor.map((x, i) => {
-        const tag = x.tipo.startsWith('traducida') ? 'traducida' : x.tipo === 'oficial' ? 'real' : x.tipo === 'ilegible' ? 'aviso' : '';
-        const ensenar = usb && x.tipo === 'texto'
-          ? `<button data-ensenar="entrada" data-i="${i}">= entrada</button><button data-ensenar="salida" data-i="${i}">= salida</button><button data-ensenar="ignorar" data-i="${i}">ignorar</button>` : '';
-        return `<div><span class="pres-tag ${tag}">${escapar(x.tipo)}</span><code>${escapar(recortar(x.linea, 110))}</code>${ensenar}</div>`;
-      }).join('') : '<span class="mini">Todavía no llegan líneas.</span>';
+      v('monitor').innerHTML = htmlMonitor(this.lineasMonitor, usb);
       const m = v('monitor'); m.scrollTop = m.scrollHeight;
     }
     const claveP = this.sensores.patrones.map((p) => p.patron + p.tipo).join('|');
@@ -1517,6 +1697,19 @@ export class Presentacion {
         : '';
     }
   }
+}
+
+const TEXTO_PUERTO_OCUPADO = 'No se pudo abrir el puerto: casi siempre está ocupado. Cierra el Monitor Serie de Arduino (o el programa que lo esté leyendo) y vuelve a pulsar «Conectar ESP32 por USB».';
+
+// Monitor del puerto (Conexión y Prueba): cada línea con su etiqueta; las desconocidas se pueden enseñar
+function htmlMonitor(lineas, usb) {
+  if (!lineas.length) return '<span class="mini">Todavía no llegan líneas.</span>';
+  return lineas.map((x, i) => {
+    const tag = x.tipo.startsWith('traducida') ? 'traducida' : x.tipo === 'oficial' ? 'real' : x.tipo === 'ilegible' ? 'aviso' : '';
+    const ensenar = usb && x.tipo === 'texto'
+      ? `<button data-ensenar="entrada" data-i="${i}">= entrada</button><button data-ensenar="salida" data-i="${i}">= salida</button><button data-ensenar="ignorar" data-i="${i}">ignorar</button>` : '';
+    return `<div><span class="pres-tag ${tag}">${escapar(x.tipo)}</span><code>${escapar(recortar(x.linea, 110))}</code>${ensenar}</div>`;
+  }).join('');
 }
 
 // ---------------------------------------------------------------- estilos propios de la sección
@@ -1573,6 +1766,49 @@ function estilos() {
 .pres-campo { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--suave); flex-wrap: wrap; }
 .pres-lista { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 12.5px; color: #cbd5e1; line-height: 1.45; }
 .pres-ensayo-aviso { border-radius: 10px; padding: 6px 10px; background: rgba(192,132,252,.14); border: 1px solid rgba(192,132,252,.5); color: #e9d5ff; font-size: 12.5px; }
+.pres-esp { margin-top: 6px; font-size: 12.5px; color: #cbd5e1; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.pres-esp b { color: #f8fafc; font-variant-numeric: tabular-nums; }
+.pres-esp b.lleno { color: #fca5a5; }
+.pres-check { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 12.5px; }
+.pres-check li { display: flex; gap: 8px; align-items: flex-start; color: var(--tenue); line-height: 1.35; }
+.pres-check li::before { content: ""; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--borde); flex: none; margin-top: 1px; box-sizing: border-box; display: grid; place-items: center; font-size: 10px; font-weight: 800; }
+.pres-check li.ok { color: #bbf7d0; }
+.pres-check li.ok::before { content: "✓"; background: rgba(34,197,94,.22); border-color: rgba(34,197,94,.7); color: #86efac; }
+.pres-check li.actual { color: #f8fafc; font-weight: 700; }
+.pres-check li.actual::before { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,.22); }
+.pres-lcd { font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: 19px; letter-spacing: .06em; line-height: 1.35; white-space: pre; overflow: hidden; background: linear-gradient(#2a58c4, #1d45a6); color: #f1f6ff; text-shadow: 0 0 6px rgba(205,225,255,.55); border: 7px solid #18202d; border-radius: 9px; padding: 6px 10px; box-shadow: inset 0 0 14px rgba(0,0,0,.35); }
+.pres-lcd.apagado { background: #1b2f63; color: rgba(241,246,255,.45); text-shadow: none; }
+.pres-grandes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.pres-grandes div { border: 1px solid var(--borde); border-radius: 10px; padding: 6px 4px; text-align: center; background: rgba(148,163,184,.07); }
+.pres-grandes small { display: block; font-size: 10.5px; color: var(--tenue); line-height: 1.2; }
+.pres-grandes b { display: block; font-size: 26px; line-height: 1.15; color: #f8fafc; font-variant-numeric: tabular-nums; }
+.pres-grandes .lleno { border-color: rgba(239,68,68,.65); background: rgba(239,68,68,.12); }
+.pres-grandes .lleno b { color: #fca5a5; }
+.pres-grandes.destello div { animation: presDestello .9s ease-out; }
+@keyframes presDestello { from { box-shadow: 0 0 0 3px rgba(74,222,128,.8); } to { box-shadow: 0 0 0 0 rgba(74,222,128,0); } }
+.pres-cruces { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: 12px; max-height: 230px; overflow: auto; }
+.pres-cruces li { display: grid; grid-template-columns: auto auto 1fr; gap: 2px 6px; align-items: baseline; color: #cbd5e1; }
+.pres-cruces li small { grid-column: 3; color: var(--tenue); font-size: 11px; }
+.pres-cruces time { color: var(--tenue); font-variant-numeric: tabular-nums; }
+.pres-cruces li.detectado > span:nth-of-type(2) { color: #f8fafc; font-weight: 700; }
+.pres-cruces li.vacio { display: block; color: var(--tenue); }
+.pres-flujo { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; counter-reset: flujo; }
+.pres-flujo li { position: relative; display: grid; grid-template-columns: 22px 1fr; column-gap: 8px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--borde); background: rgba(148,163,184,.06); counter-increment: flujo; }
+.pres-flujo li::before { content: counter(flujo); grid-row: span 2; align-self: center; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; border: 1px solid var(--borde); color: var(--suave); }
+.pres-flujo li:not(:last-child)::after { content: "↓"; position: absolute; left: 15px; bottom: -11px; font-size: 11px; line-height: 1; color: var(--tenue); }
+.pres-flujo b { font-size: 12.5px; color: var(--texto); }
+.pres-flujo span { grid-column: 2; font-size: 11.5px; color: var(--tenue); }
+.pres-flujo li.ok { border-color: rgba(34,197,94,.5); }
+.pres-flujo li.ok::before { content: "✓"; background: rgba(34,197,94,.22); border-color: rgba(34,197,94,.6); color: #86efac; }
+.pres-flujo.pulso li { animation: presFlujo 1.1s ease-out both; }
+.pres-flujo.pulso li:nth-child(2) { animation-delay: .15s; } .pres-flujo.pulso li:nth-child(3) { animation-delay: .3s; }
+.pres-flujo.pulso li:nth-child(4) { animation-delay: .45s; } .pres-flujo.pulso li:nth-child(5) { animation-delay: .6s; }
+@keyframes presFlujo { 0% { background: rgba(74,222,128,.32); } 100% { background: rgba(148,163,184,.06); } }
+.pres-campos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.pres-campos div { border-radius: 8px; padding: 4px 6px; background: #050a14; border: 1px solid var(--borde); min-width: 0; }
+.pres-campos small { display: block; font-size: 10px; color: var(--tenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pres-campos b { display: block; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; color: #e2e8f0; overflow-wrap: anywhere; }
+.pres-campos code { grid-column: 1 / -1; font-size: 11.5px; color: #86efac; overflow-wrap: anywhere; margin-top: 2px; }
 `;
   document.head.append(s);
 }
