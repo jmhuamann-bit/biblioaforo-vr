@@ -127,7 +127,7 @@ export class Minimapa {
     if (ruta) {
       ctx.strokeStyle = '#5eead4'; ctx.lineWidth = 2.5; ctx.beginPath();
       let primero = true;
-      for (const p of ruta) { const enPiso = piso === 1 ? p.y > -2.3 : p.y < -2.2;   // el sótano está abajo if (!enPiso) { primero = true; continue; } if (primero) { ctx.moveTo(X(p.x), Y(p.z)); primero = false; } else ctx.lineTo(X(p.x), Y(p.z)); }
+      for (const p of ruta) { const enPiso = piso === 1 ? p.y > -2.3 : p.y < -2.2; /* el sótano está abajo */ if (!enPiso) { primero = true; continue; } if (primero) { ctx.moveTo(X(p.x), Y(p.z)); primero = false; } else ctx.lineTo(X(p.x), Y(p.z)); }
       ctx.stroke();
     }
     if (objetivo && objetivo.piso === piso) { ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(X(objetivo.x), Y(objetivo.z), 5.5, 0, Math.PI * 2); ctx.stroke(); }
