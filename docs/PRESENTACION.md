@@ -105,6 +105,7 @@ El sensor E18-D80NK solo dice «alguien pasó» (detecta de ~3 a 80 cm). La **di
 4. Mientras te acercas, el stick y el teletransporte quedan **bloqueados** (el mundo queda fijo a la sala real). La distancia baja en vivo (2,00 m → … → INGRESO).
 5. Al pasar frente al sensor, el ESP32 lo detecta y el simulador te hace entrar. Después: **A** para avanzar por la ruta (saltos cortos con fundido), el **gatillo** sobre una silla verde (o **A**) para elegirla y **A** para sentarte. Si te sientas en una silla real, la vista se ajusta sola a la altura de alguien sentado.
 6. Recalibrar: botón **Recalibrar (2 m)** del tablero (**B**) o **A** mientras estás a 2 m. Si el visor se recentra (botón Meta), la app pide calibrar de nuevo.
+7. **Volver al inicio** (para repetir la demostración): hunde el **stick izquierdo** o usa el botón **Volver al inicio** del tablero (**B**). La presentación empieza otra vez (mesa piloto con C y D libres) y **se conserva la calibración**: vuelve caminando a tu punto de partida y pasa otra vez frente a S1. El tablero aparece siempre frente a ti; en esta sección no ofrece «Simular datos», porque cortaría el sensor real (para practicar sin sensores está el **Modo ensayo**).
 
 ## Qué es real y qué es simulado
 

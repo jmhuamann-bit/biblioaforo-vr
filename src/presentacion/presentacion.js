@@ -85,6 +85,8 @@ export class Presentacion {
   constructor(app) {
     this.app = app;
     this.id = 'presentacion';
+    this.ocultarSimulacionVR = true;      // en el tablero del visor no se ofrece «Simular datos» (cortaría el sensor real)
+    this.calRetenida = null;              // calibración que se conserva al volver al inicio
     this.titulo = 'Simulación para presentación';
     this.escena = 'biblioteca';
     this.sensores = new SensoresPresentacion(app);
@@ -552,6 +554,25 @@ export class Presentacion {
     this.vr.refrescar();
   }
 
+  // Volver al inicio en el visor (stick izquierdo hundido o botón del tablero): la demostración empieza otra vez
+  // (mundo lleno, mesa piloto con C y D libres) y, si el visor ya estaba calibrado, se conserva la calibración:
+  // el sensor real no se movió, así que basta con volver caminando al punto de partida
+  volverAlInicioVR() {
+    this.calRetenida = this.enVR ? this.cal : null;
+    this.app.irModo('presentacion', { reiniciar: true });
+  }
+
+  #restaurarCalibracion(cal) {
+    this.cal = cal;
+    this.calPaso = null; this.sensorTocado = null; this.liberado = false;
+    aplicarAlRig(this.vr.rig, cal);
+    this.vr.nivel = 1;
+    this.ayudas.panelGuia.malla.visible = false;
+    this.#log('calibracion', 'De vuelta al inicio: se conserva la calibración del visor');
+    this.#irA('a2m');
+    H.banner('De vuelta al inicio', 'ok', 'La calibración se conserva: vuelve a tu punto de partida (a 2 m del sensor) y pasa otra vez frente a S1.', 5600);
+  }
+
   #alResetXR() {
     if (this.entro || !this.cal) return;
     this.cal = null;
@@ -924,8 +945,13 @@ export class Presentacion {
     vr.panelTablero.malla.visible = false;
     this.panelPendiente = true;
     if (!this.entro) {
-      this.cal = null; this.liberado = false; this.calPaso = null;
-      if (this.fase !== 'calibracion') this.#irA('calibracion'); else this.#pintarGuia();
+      const previa = this.calRetenida;
+      this.calRetenida = null;
+      if (previa) this.#restaurarCalibracion(previa);
+      else {
+        this.cal = null; this.liberado = false; this.calPaso = null;
+        if (this.fase !== 'calibracion') this.#irA('calibracion'); else this.#pintarGuia();
+      }
     }
     try {
       const ref = this.app.motor.renderer.xr.getReferenceSpace();
@@ -964,7 +990,6 @@ export class Presentacion {
     else l.push({ id: 'p-levantar', texto: 'Levantarme', fn: () => this.#levantarse() });
     if (s.ensayo) l.push({ id: 'p-s1', texto: 'Ensayo: S1', fn: () => s.entradaEnsayo(), acento: '#c084fc' }, { id: 'p-s2', texto: 'Ensayo: S2', fn: () => s.salidaEnsayo(), acento: '#c084fc' });
     l.push({ id: 'p-ensayo', texto: s.ensayo ? 'Ensayo ✓' : 'Modo ensayo', fn: () => this.#alternarEnsayo(), activo: s.ensayo });
-    l.push({ id: 'p-reiniciar', texto: 'Reiniciar', fn: () => this.reiniciar() });
     return l.slice(0, 5);
   }
 

@@ -256,8 +256,16 @@ class App {
   alternarSimulacion(forzar = null) {
     const activar = forzar ?? this.fuentes.modo !== 'sim';
     this.fuentes.simular(activar);
-    if (!activar && !this.fuentes.enVivo) { this.dialogoConectar(); return; }
-    this.hud.aviso(activar ? 'Simulación: la mesa piloto y toda la biblioteca son simuladas.' : 'Datos reales: la mesa piloto muestra la maqueta; el resto de la biblioteca sigue simulado.', 'info', 5000);
+    const enVisor = !!this.vr?.presentando;
+    if (!activar && !this.fuentes.enVivo) {
+      // con el visor puesto no se ve el diálogo de la página: el aviso aparece dentro del visor
+      if (enVisor) this.vr.banner('Sin sensores conectados', 'alerta', 'La maqueta queda en espera. Para datos reales, conecta el ESP32 en la laptop o recibe la sala con su código.', 6500);
+      else this.dialogoConectar();
+      return;
+    }
+    const texto = activar ? 'Simulación: la mesa piloto y toda la biblioteca son simuladas.' : 'Datos reales: la mesa piloto muestra la maqueta; el resto de la biblioteca sigue simulado.';
+    if (enVisor) this.vr.banner(activar ? 'Simulación' : 'Datos reales', 'info', texto, 4500);
+    else this.hud.aviso(texto, 'info', 5000);
   }
 
   // ---------------------------------------------------------------- ratón sobre la escena (vistas en órbita)

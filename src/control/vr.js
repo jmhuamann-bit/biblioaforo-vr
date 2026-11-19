@@ -2,6 +2,7 @@
 //  · Stick izquierdo: caminar · Stick derecho: girar (← →) y teletransporte (↑ y soltar)
 //  · Gatillo: apuntar con el rayo a un asiento, una mesa, un sensor o un botón del tablero
 //  · A: acción principal de la experiencia · B: tablero · X: piso del mapa / entra una persona (maqueta) · Y: ayuda
+//  · Stick izquierdo hundido: volver al inicio (también en el tablero). El tablero y la ayuda aparecen frente a ti.
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
@@ -12,6 +13,8 @@ import { MAQUETA as M } from '../config.js';
 import { PLANO, yPiso, nivelPorAltura, nivelDe, NivelDe } from '../biblioteca/plano.js';
 import { alBanner } from '../juego/hudJuego.js';
 import { desvio } from './escritorio.js';
+
+const POS_TABLERO = { dist: 0.95, lado: -0.05, alto: -0.25 };
 
 const ARRIBA = new THREE.Vector3(0, 1, 0);
 const zonaMuerta = (v, z = 0.18) => (Math.abs(v) < z ? 0 : (v - Math.sign(v) * z) / (1 - z));
@@ -144,7 +147,42 @@ export class ControlVR {
     this.#actualizarPaneles(true);
   }
 
-  mostrarTablero() { this.panelTablero.malla.visible = true; this.panelAyuda.malla.visible = false; this.inicioPendiente = false; this.refrescar(); }
+  mostrarTablero() {
+    if (!this.panelTablero.malla.visible) this.#alFrente(this.panelTablero, POS_TABLERO);
+    this.panelTablero.malla.visible = true; this.panelAyuda.malla.visible = false; this.inicioPendiente = false; this.refrescar();
+  }
+
+  // B: muestra u oculta el tablero; aparece frente a ti, donde estés mirando (no en un punto fijo de la sala)
+  #alternarTablero() {
+    const ver = !this.panelTablero.malla.visible;
+    if (ver) this.#alFrente(this.panelTablero, POS_TABLERO);
+    this.panelTablero.malla.visible = ver;
+    this.panelAyuda.malla.visible = false;
+    this.inicioPendiente = false;
+    if (ver) this.refrescar();
+  }
+
+  // Coloca un panel frente a la cabeza. Los paneles viven en el rig, y la cámara también: todo en el mismo espacio.
+  // dist: metros al frente · lado: metros a la derecha (+) · alto: respecto de los ojos · giro: cuánto se voltea hacia ti
+  #alFrente(panel, { dist = 0.9, lado = 0, alto = -0.2, giro = 0 } = {}) {
+    const cam = this.camara;
+    const f = this.tmpV.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    const yaw = Math.atan2(-f.x, -f.z);
+    const s = Math.sin(yaw), c = Math.cos(yaw);
+    panel.malla.position.set(cam.position.x - s * dist + c * lado, Math.max(0.6, cam.position.y + alto), cam.position.z - c * dist - s * lado);
+    panel.malla.rotation.set(0, yaw + giro, 0);
+  }
+
+  // Volver al inicio (stick izquierdo hundido o botón del tablero): cada experiencia decide qué es su inicio.
+  // En la presentación, la demostración vuelve a empezar y se conserva la calibración del visor.
+  volverAlInicio() {
+    const m = this.app.modoActual;
+    this.panelTablero.malla.visible = false;
+    if (this.app.escenaActual !== 'maqueta' && m?.volverAlInicioVR) { m.volverAlInicioVR(); return; }
+    this.#recentrar();
+    this.#vibrar(0.4, 60);
+    this.banner('De vuelta al inicio', 'info', this.app.escenaActual === 'maqueta' ? 'La maqueta queda frente a ti.' : 'Estás en el punto de partida de esta experiencia.', 2600);
+  }
 
   #posicionInicial() {
     const esc = this.escenaActual;
@@ -306,6 +344,7 @@ export class ControlVR {
     }
     if (this.panelAyuda.malla.visible && this.inicioPendiente) {
       this.panelAyuda.malla.visible = false;
+      this.#alFrente(this.panelTablero, POS_TABLERO);
       this.panelTablero.malla.visible = true;
       this.mostrarPistas = true;
       this.inicioPendiente = false;
@@ -428,7 +467,7 @@ export class ControlVR {
     if (enMaqueta) {
       fila(H - 240, [
         { id: 'menu', texto: 'Experiencias', fn: () => app.irModo('menu') },
-        { id: 'sim', texto: sim ? 'Simulando ✓' : 'Simular datos', fn: () => app.alternarSimulacion(), activo: sim },
+        { id: 'sim', texto: sim ? 'Usar datos reales' : 'Simular datos', fn: () => app.alternarSimulacion() },
         { id: 'escala', texto: this.escala === 'humana' ? 'Volver a la mesa' : 'Entrar 1:17', fn: () => this.alternarEscala(), glifo: 'A', deshabilitado: this.modo === 'ar' },
         { id: 'recorrido', texto: 'Recorrido', fn: async () => { await app.abrirRecorrido(); this.panelRecorrido.malla.visible = true; this.refrescar(); }, activo: !!app.recorrido?.abierto },
         { id: 'cam', texto: 'Cámara ESP32', fn: () => { this.panelCamara.malla.visible = !this.panelCamara.malla.visible; this.refrescar(); }, activo: this.panelCamara.malla.visible },
@@ -449,8 +488,9 @@ export class ControlVR {
       if (app.modo !== 'menu') this.#botonesMapa(p, W, H - 270);
       fila(H - 240, [
         { id: 'menu', texto: 'Experiencias', fn: () => app.irModo('menu'), activo: app.modo === 'menu' },
+        { id: 'inicio', texto: 'Volver al inicio', fn: () => this.volverAlInicio(), glifo: 'stick' },
         { id: 'pisoMapa', texto: `Mapa: ${nivelDe(this.pisoMapa)}`, fn: () => { this.pisoMapa = this.pisoMapa === 1 ? 2 : 1; this.refrescar(); }, glifo: 'X', deshabilitado: app.modo === 'menu' },
-        { id: 'sim', texto: sim ? 'Simulando ✓' : 'Datos reales', fn: () => app.alternarSimulacion(), activo: sim },
+        ...(m?.ocultarSimulacionVR ? [] : [{ id: 'sim', texto: sim ? 'Usar datos reales' : 'Simular datos', fn: () => app.alternarSimulacion() }]),
         { id: 'salir', texto: 'Salir del visor', fn: () => this.salir(), acento: '#f87171' },
       ]);
       const extra = [...(m?.botonesVR?.() || [])];
@@ -559,7 +599,7 @@ export class ControlVR {
       ['stick', 'Stick: caminar'],
       ['X', lib ? 'Nivel del mapa (piso 1 o sótano)' : 'Entra una persona (simulación)'],
       ['Y', 'Mostrar u ocultar esta ayuda'],
-      ['agarre', lib ? 'Pulsar el stick: volver al inicio' : 'Agarre: tomar y girar la maqueta'],
+      lib ? ['stick', 'Hundir el stick: volver al inicio'] : ['agarre', 'Agarre: tomar y girar la maqueta'],
     ];
     const der = [
       ['stick', 'Stick: ← → girar · ↑ teletransporte'],
@@ -616,7 +656,7 @@ export class ControlVR {
         const textoA = lib ? (this.app.modoActual?.textoA?.() || '—') : (this.escala === 'humana' ? 'Volver a la mesa' : 'Entrar 1:17');
         const items = der
           ? [['A', textoA], ['B', 'Tablero'], ['stick', '←→ girar · ↑ saltar']]
-          : [['X', lib ? 'Piso 1 o sótano' : 'Entra una persona'], ['Y', 'Ayuda'], ['stick', 'Caminar']];
+          : [['X', lib ? 'Piso 1 o sótano' : 'Entra una persona'], ['Y', 'Ayuda'], ['stick', lib ? 'Caminar · hundir: inicio' : 'Caminar']];
         items.forEach(([g, t], k) => {
           const y = 70 + k * 120;
           dibujarGlifo(ctx, g, 60, y, 64);
@@ -755,15 +795,16 @@ export class ControlVR {
         if (flanco(4)) this.#botonX();
         if (flanco(5)) {
           const ver = !this.panelAyuda.malla.visible;
+          if (ver) this.#alFrente(this.panelAyuda, { dist: 1.0, alto: -0.05 });
           this.panelAyuda.malla.visible = ver;
           this.mostrarPistas = ver || !this.inicioPendiente;
           this.inicioPendiente = false;
           this.panelAyuda.marcar();
         }
-        if (flanco(3)) this.#recentrar();
+        if (flanco(3)) this.volverAlInicio();
       } else {
         if (flanco(4)) this.#botonA();
-        if (flanco(5)) { this.panelTablero.malla.visible = !this.panelTablero.malla.visible; this.panelAyuda.malla.visible = false; this.inicioPendiente = false; }
+        if (flanco(5)) this.#alternarTablero();
         if (Math.abs(sx) > 0.7 && this.tGiro <= 0) { giro = -Math.sign(sx) * Math.PI / 6; this.tGiro = 0.35; }
         if (Math.abs(sx) < 0.3) this.tGiro = 0;
         if (sy < -0.6) apuntar = c;
@@ -907,6 +948,7 @@ export class ControlVR {
       if (this.app.fuentes.modo === 'sim') { this.app.accion('entra'); this.#vibrar(0.3, 40, 'left'); }
     } else {
       this.pisoMapa = this.pisoMapa === 1 ? 2 : 1;
+      if (!this.panelTablero.malla.visible) this.#alFrente(this.panelTablero, POS_TABLERO);
       this.panelTablero.malla.visible = true;
       this.panelAyuda.malla.visible = false;
       this.inicioPendiente = false;

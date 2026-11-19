@@ -56,8 +56,8 @@ Colores de los asientos: verde libre, rojo ocupado, ámbar apartado con un objet
 1. Abre el enlace en el navegador del visor y pulsa **Entrar al visor 3D** (con Quest Link, Air Link o SteamVR, en Chrome o Edge de la PC).
 2. Aprieta el gatillo para cerrar la ayuda inicial.
 3. **Gatillo:** apunta con el rayo a un asiento, una mesa, un sensor o un botón del tablero. Sobre el control aparece una ficha con lo que apuntas.
-4. **A:** acción principal de la experiencia (el asiento más cercano, sentarte, siguiente misión…). **B:** tablero con el mapa (cada asiento se elige con el gatillo) y los botones de la experiencia. **X:** nivel del mapa: piso 1 o sótano (en la maqueta, entra una persona). **Y:** ayuda.
-5. Stick izquierdo: caminar. Stick derecho: girar (← →) y teletransporte (↑ y soltar).
+4. **A:** acción principal de la experiencia (el asiento más cercano, sentarte, siguiente misión…). **B:** tablero con el mapa (cada asiento se elige con el gatillo) y los botones de la experiencia; aparece frente a ti, donde estés mirando. **X:** nivel del mapa: piso 1 o sótano (en la maqueta, entra una persona). **Y:** ayuda.
+5. Stick izquierdo: caminar; **hundirlo: volver al inicio** (también está en el tablero). Stick derecho: girar (← →) y teletransporte (↑ y soltar).
 
 Los avisos del juego (te ganaron el asiento, misión cumplida, aforo completo…) también aparecen dentro del visor. En Ingeniería hay realidad mixta: la maqueta virtual aparece sobre tu mesa real.
 
